@@ -457,7 +457,9 @@ class TrackingEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
         self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
-        # viewer settings
-        self.viewer.eye = (1.5, 1.5, 1.5)
+        # viewer settings - 2026-08-16: 拉远相机以观察跳高全景
+        # 原 (1.5, 1.5, 1.5) 太近，机器人跳到 1.3m+ 时只能看到局部
+        # 新 (4.0, 0.0, 2.0): 侧面 4m 远，高度 2m，俯瞰完整跳高动作
+        self.viewer.eye = (4.0, 0.0, 2.0)
         self.viewer.origin_type = "world"
         # self.viewer.asset_name = "robot"
