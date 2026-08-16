@@ -52,13 +52,13 @@ parser.add_argument(
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
 # -- camera angle for video recording
 _CAMERA_ANGLES = {
-    "side": (0.0, 4.0, 2.0),       # 侧面（Y 轴方向），默认，适合观察跳高
-    "front": (4.0, 0.0, 2.0),      # 正面（X 轴方向，机器人朝向前方）
-    "back": (-4.0, 0.0, 2.0),      # 背面
-    "back_side": (0.0, -4.0, 2.0), # 后侧面
-    "eye_level": (0.0, 4.0, 1.0),  # 平视（腰部高度）
-    "overhead": (0.0, 4.0, 3.5),   # 俯瞰
-    "diagonal": (3.0, 3.0, 2.0),   # 45° 斜角
+    "side": (0.0, 5.0, 2.5),       # 侧面（Y 轴方向），默认，适合观察跳高
+    "front": (5.0, 0.0, 2.5),      # 正面（X 轴方向，机器人朝向前方）
+    "back": (-5.0, 0.0, 2.5),      # 背面
+    "back_side": (0.0, -5.0, 2.5), # 后侧面
+    "eye_level": (0.0, 5.0, 1.0),  # 平视（腰部高度）
+    "overhead": (0.0, 5.0, 4.0),   # 俯瞰
+    "diagonal": (3.5, 3.5, 2.5),   # 45° 斜角
 }
 parser.add_argument(
     "--camera_angle", type=str, default="side",
