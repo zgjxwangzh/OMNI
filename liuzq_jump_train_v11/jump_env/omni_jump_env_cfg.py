@@ -247,7 +247,7 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
             # max_excess 0.8 上限覆盖到 base 1.6m。目标 apex 1.05m(参考 0.961)。
             # 2026-08-16: 突破局部最优, 9→15 强制策略探索起跳
             weight=15.0,
-            params={"command_name": "motion", "threshold": 0.80, "scale": 1.0, "max_excess": 0.8},
+            params={"command_name": "motion", "threshold": 0.79, "scale": 1.0, "max_excess": 0.8},
         )
         # 起跳爆发速度(jump_mask 窗口)
         self.rewards.takeoff_vertical_vel = RewTerm(

@@ -45,7 +45,7 @@ class OmniJumpPPORunnerCfg(RslRlOnPolicyRunnerCfg):
 
         # 50Hz(原 100Hz 的一半): 12 步 @0.02s = 0.24s, 真实时间不变(xMimic LOW_FREQ_SCALE=0.5)
         self.policy = RslRlPpoActorCriticCfg(
-            init_noise_std=0.8,
+            init_noise_std=1.2,  # 2026-08-16: 0.8→1.2, 加大随机探索幅度以产生协调爆发起跳
             # 注意: Isaac Lab 2.2.x 的 RslRlPpoActorCriticCfg 没有
             # actor_obs_normalization / critic_obs_normalization 字段, 不要加;
             # 归一化由 empirical_normalization=True 控制。
