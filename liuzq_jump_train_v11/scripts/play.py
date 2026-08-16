@@ -50,6 +50,21 @@ parser.add_argument(
     help="Keep the simulation running after one full motion playback (used with --play_full_motion).",
 )
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
+# -- camera angle for video recording
+_CAMERA_ANGLES = {
+    "side": (4.0, 0.0, 2.0),       # 侧面，默认，适合观察跳高
+    "front": (0.0, 4.0, 2.0),      # 正面
+    "back": (0.0, -4.0, 2.0),      # 背面
+    "back_side": (-4.0, 0.0, 2.0), # 后侧面
+    "eye_level": (4.0, 0.0, 1.0),  # 平视（腰部高度）
+    "overhead": (4.0, 0.0, 3.5),   # 俯瞰
+    "diagonal": (3.0, 3.0, 2.0),   # 45° 斜角
+}
+parser.add_argument(
+    "--camera_angle", type=str, default="side",
+    choices=list(_CAMERA_ANGLES.keys()),
+    help="Camera viewing angle for video recording (default: side).",
+)
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
@@ -164,6 +179,10 @@ def main():
         env_cfg.commands.motion.motion_file = args_cli.motion_file
     env_cfg.seed = agent_cfg.seed
     env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
+    # override camera angle
+    if args_cli.camera_angle in _CAMERA_ANGLES:
+        env_cfg.viewer.eye = _CAMERA_ANGLES[args_cli.camera_angle]
+        print(f"[INFO] Camera angle: {args_cli.camera_angle} -> eye={env_cfg.viewer.eye}")
 
     # -- specify directory for logging experiments
     log_root_path = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name)
