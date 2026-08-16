@@ -246,9 +246,10 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
             # 2026-08-15: 增强腾空高度 weight 5→10 + 超线性(excess+excess², 函数内实现)。
             # max_excess 0.8 上限覆盖到 base 1.6m。目标 apex 1.05m(参考 0.961)。
             # 2026-08-16: 突破局部最优, 9->15 强制策略探索起跳
-            # 2026-08-16: threshold 0.79->0.82->0.80, 与 _jump_gate(0.80) 对齐消除死区
-            weight=20.0,
-            params={"command_name": "motion", "threshold": 0.80, "scale": 1.0, "max_excess": 0.8},
+            # 2026-08-16: 20->100, 跳高奖励在总 reward 占比从 0.3% 拉到 5%+
+            # 否则策略永远选"站着"(4.5/步)而非"跳"(0.013/步平均)
+            weight=100.0,
+            params={"command_name": "motion", "threshold": 0.79, "scale": 1.0, "max_excess": 0.8},
         )
         # 起跳爆发速度(jump_mask 窗口)
         self.rewards.takeoff_vertical_vel = RewTerm(
@@ -256,8 +257,8 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
             # 2026-08-15: max_vel 1.8→2.3(1.8=参考峰值, 达到就满奖, 无梯度冲更高;
             # 目标 apex 1.05m 需起跳速度 2.3 m/s, 打开超参考的冲高梯度)
             # 2026-08-16: 突破局部最优, 9->12 强化起跳爆发梯度
-            # 2026-08-16: 12->15 进一步强化起跳速度激励
-            weight=15.0,
+            # 2026-08-16: 15->50, 起跳速度也需要强梯度
+            weight=50.0,
             params={"command_name": "motion", "vel_thresh": 0.3, "max_vel": 2.3},
         )
         # 2026-08-14 新增: 推蹬段奖励双腿快速伸展(膝/髋伸直), 教爆发起跳
