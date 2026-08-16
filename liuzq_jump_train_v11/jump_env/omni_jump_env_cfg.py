@@ -230,9 +230,9 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
                     "robot",
                     joint_names=[
                         "shoulder_pitch_l_joint", "shoulder_roll_l_joint", "shoulder_yaw_l_joint",
-                        "elbow_pitch_l_joint", "elbow_yaw_l_joint", "wrist_pitch_l_joint", "wrist_roll_l_joint",
+                        "elbow_pitch_l_joint", "elbow_yaw_l_joint",
                         "shoulder_pitch_r_joint", "shoulder_roll_r_joint", "shoulder_yaw_r_joint",
-                        "elbow_pitch_r_joint", "elbow_yaw_r_joint", "wrist_pitch_r_joint", "wrist_roll_r_joint",
+                        "elbow_pitch_r_joint", "elbow_yaw_r_joint",
                     ],
                 ),
                 "std": 0.3,
@@ -315,8 +315,8 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
         # 腾空段抑制向右拧转(世界 z 轴角速度)
         self.rewards.flight_yaw_penalty = RewTerm(
             func=flight_yaw_penalty,
-            # 2026-08-16: 加强 -0.15→-0.3(89700 反馈腾空扭转; 参考腾空 yaw 角速度=0 零冲突)
-            weight=-0.3,
+            # 2026-08-17: -0.3→-1.0, 加强 3 倍, 解决空中扭转 (flight_yaw -0.33 仍偏高)
+            weight=-1.0,
             params={
                 "command_name": "motion",
                 "asset_cfg": SceneEntityCfg("robot"),
@@ -358,10 +358,11 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
         # 限制大腿外展(双腿叉开)
         self.rewards.leg_spread_penalty = RewTerm(
             func=hip_spread_penalty,
-            weight=-8.0,
+            # 2026-08-17: -8→-20 + threshold 0.35→0.20, 防止空中劈叉
+            weight=-20.0,
             params={
                 "asset_cfg": SceneEntityCfg("robot", joint_names=["hip_roll_l_joint", "hip_roll_r_joint"]),
-                "threshold": 0.35,
+                "threshold": 0.20,
                 "scale": 1.0,
             },
         )
@@ -383,9 +384,8 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
         # (参考 npz 起跳前脚踝 z 恒 0.033 贴地/下蹲段脚速≤0.05, 碎步是策略自学的)
         self.rewards.pre_jump_foot_motion_penalty = RewTerm(
             func=pre_jump_foot_motion_penalty,
-            # 2026-08-16: 加强 -1.0→-2.0 + vel_thresh 0.06→0.03(89700 反馈小碎步未完全消失,
-            # 用户要求"起跳前脚一点都不能动"; 函数已改全速度含z治踮脚)
-            weight=-2.0,
+            # 2026-08-17: -2→-5, 加强起跳前脚步约束
+            weight=-5.0,
             params={
                 "command_name": "motion",
                 "asset_cfg": SceneEntityCfg(
@@ -437,7 +437,8 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
         # 腾空段惩罚肩后摆
         self.rewards.arm_back_penalty = RewTerm(
             func=arm_back_penalty,
-            weight=-3.0,
+            # 2026-08-17: -3→-6, 加强手臂后摆约束 (arm_back 从 -0.22 恶化到 -0.26)
+            weight=-6.0,
             params={
                 "command_name": "motion",
                 "asset_cfg": SceneEntityCfg(
@@ -475,7 +476,8 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
         )
         self.rewards.leg_symmetry_penalty = RewTerm(
             func=leg_symmetry_penalty,
-            weight=-1.0,
+            # 2026-08-17: -1→-5, 加强 5 倍, 之前完全无效 (5503 时 leg_symmetry 仍 -0.45)
+            weight=-5.0,
             params={
                 "asset_cfg": SceneEntityCfg(
                     "robot",
@@ -494,7 +496,8 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
         # 推蹬段罚左右腿发力不一致(髋/膝伸展速度差), 治腾空扭转(参考差 0 零冲突)
         self.rewards.takeoff_leg_symmetry_penalty = RewTerm(
             func=takeoff_leg_symmetry_penalty,
-            weight=-2.0,
+            # 2026-08-17: -2→-8, 加强 4 倍, 起跳对称性仍然很差 (takeoff_leg_symmetry -0.61)
+            weight=-8.0,
             params={
                 "command_name": "motion",
                 "asset_cfg": SceneEntityCfg(
