@@ -238,7 +238,7 @@ def main():
     else:  # rsl-rl 4.x 用模块函数导出
         from isaaclab_rl.rsl_rl import export_policy_as_jit, export_policy_as_onnx
 
-        policy_nn = runner.alg.actor_critic
+        policy_nn = runner.alg.policy
         if hasattr(policy_nn, "actor_obs_normalizer"):
             normalizer = policy_nn.actor_obs_normalizer
         else:
@@ -259,7 +259,8 @@ def main():
         # run everything in inference mode
         with torch.inference_mode():
             # agent stepping
-            actions = policy(obs)
+            _obs = obs['policy'] if hasattr(obs, '__getitem__') and 'policy' in (obs.keys() if hasattr(obs, 'keys') else []) else obs
+            actions = policy(_obs)
             # env stepping
             obs, _, dones, _ = env.step(actions)
             # reset recurrent states for episodes that have terminated

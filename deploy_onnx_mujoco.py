@@ -99,23 +99,23 @@ DEFAULT_JOINT_POS_MOTOR = np.array([
     0.300, 0.0, 0.0, -0.700, 0.0, 0.0, 0.0,    # 右臂
 ], dtype=np.float32)
 
-# PD 增益（motor order，来自 high_dynamic.yaml dof 段）
-# 注意：env-omni31.yaml 的 sim 值与 high_dynamic.yaml 不同！
-# 必须以 high_dynamic.yaml 为准（与 ONNX metadata joint_stiffness/damping 一致）
+# PD 增益（motor order，与 omni_29dof_nohead_noshoe_dcmotor_identified.py 一致）
+# hip_pitch/roll, knee: 120/5 | hip_yaw, waist_yaw: 100/5 | ankle: 30/3
+# waist: 120/5 | shoulder/elbow: 50/2 | wrist: 5/1
 KP_MOTOR = np.array([
-    150.0, 150.0, 150.0, 200.0, 20.0, 20.0,
-    150.0, 150.0, 150.0, 200.0, 20.0, 20.0,
-    150.0, 150.0, 150.0,
-    100.0, 100.0, 50.0, 50.0, 50.0, 40.0, 40.0,
-    100.0, 100.0, 50.0, 50.0, 50.0, 40.0, 40.0,
+    120.0, 120.0, 100.0, 120.0, 30.0, 30.0,
+    120.0, 120.0, 100.0, 120.0, 30.0, 30.0,
+    100.0, 120.0, 120.0,
+    50.0, 50.0, 50.0, 50.0, 50.0, 5.0, 5.0,
+    50.0, 50.0, 50.0, 50.0, 50.0, 5.0, 5.0,
 ], dtype=np.float32)
 
 KD_MOTOR = np.array([
-    5.0, 5.0, 5.0, 5.0, 2.0, 2.0,
-    5.0, 5.0, 5.0, 5.0, 2.0, 2.0,
+    5.0, 5.0, 5.0, 5.0, 3.0, 3.0,
+    5.0, 5.0, 5.0, 5.0, 3.0, 3.0,
     5.0, 5.0, 5.0,
-    2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
-    2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
+    2.0, 2.0, 2.0, 2.0, 2.0, 1.0, 1.0,
+    2.0, 2.0, 2.0, 2.0, 2.0, 1.0, 1.0,
 ], dtype=np.float32)
 
 # 控制参数
@@ -191,13 +191,11 @@ def verify_mujoco_joint_order(model):
 class OnnxPolicy:
     """封装 ONNX 推理 + 观测构建，与 high_dynamic_policy.py 逻辑一致"""
 
-    def __init__(self, onnx_path, default_pos_motor=None, action_scale_val=None, motion_npz_path=None):
+    def __init__(self, onnx_path, motion_path=None, default_pos_motor=None, action_scale_val=None):
         self.onnx_path = onnx_path
-
-        # 加载 NPZ 参考轨迹（如果提供）
-        self.npz_ref = None
-        if motion_npz_path is not None:
-            self._load_npz_reference(motion_npz_path)
+        self.motion_path = motion_path
+        self.motion_data = None
+        self.motion_total_steps = 0
 
         # 加载 ONNX metadata
         print(f"\n═══ 加载 ONNX 模型 ═══")
@@ -227,10 +225,10 @@ class OnnxPolicy:
                 self.action_scale_policy = scale_meta.copy()
                 print(f"  ✓ 使用 ONNX metadata 中的 action_scale (policy order): {scale_meta[0]:.3f}")
             else:
-                self.action_scale_policy = np.full(NUM_JOINTS, action_scale_val or 0.5, dtype=np.float32)
+                self.action_scale_policy = np.full(NUM_JOINTS, action_scale_val or 0.25, dtype=np.float32)
                 print(f"  ⚠ metadata action_scale 长度不匹配，使用默认值")
         else:
-            val = action_scale_val if action_scale_val is not None else 0.5
+            val = action_scale_val if action_scale_val is not None else 0.25
             self.action_scale_policy = np.full(NUM_JOINTS, val, dtype=np.float32)
             print(f"  ⚠ ONNX 无 action_scale metadata，使用默认值 {val}")
 
@@ -293,8 +291,51 @@ class OnnxPolicy:
             else:
                 print(f"  ✓ ONNX 输入维度匹配")
 
+        # 加载参考动作 NPZ（omni_mimic 框架必须）
+        if motion_path and os.path.isfile(motion_path):
+            self._load_motion(motion_path)
+        else:
+            print(f"  ⚠ 未提供 NPZ 参考动作文件，参考轨迹将保持默认站立姿态")
+            print(f"     omni_mimic 框架的 ONNX 需要 NPZ 文件才能正确构建观测！")
+
         # 历史缓冲区
         self.reset()
+
+    def _load_motion(self, motion_path):
+        """加载 NPZ 参考动作文件"""
+        print(f"\n  加载参考动作: {motion_path}")
+        data = np.load(motion_path)
+        required = ('joint_pos', 'joint_vel', 'body_quat_w')
+        for key in required:
+            if key not in data:
+                raise ValueError(f"NPZ 缺少必要字段: {key}")
+
+        jp = np.asarray(data['joint_pos'], dtype=np.float32)
+        jv = np.asarray(data['joint_vel'], dtype=np.float32)
+        bq = np.asarray(data['body_quat_w'], dtype=np.float32)
+
+        if jp.shape[1] != NUM_JOINTS:
+            raise ValueError(f"joint_pos 列数 {jp.shape[1]} != {NUM_JOINTS}")
+
+        # joint_pos/joint_vel 是 policy order（与训练一致）
+        self.motion_joint_pos = jp
+        self.motion_joint_vel = jv
+        self.motion_body_quat_w = bq  # (T, num_bodies, 4)
+        self.motion_total_steps = jp.shape[0]
+        self.num_bodies = bq.shape[1]
+        self.anchor_body_index = 0  # base_link
+
+        print(f"  ✓ 参考动作: {self.motion_total_steps} 帧, {self.num_bodies} bodies")
+        print(f"    joint_pos range: [{jp.min():.3f}, {jp.max():.3f}]")
+
+    def _get_ref_at_step(self, step):
+        """从 NPZ 获取当前帧的参考轨迹（与 SDK high_dynamic_policy.py 一致）"""
+        if self.motion_total_steps <= 0:
+            return
+        idx = min(max(int(step), 0), self.motion_total_steps - 1)
+        self.ref_joint_pos = self.motion_joint_pos[idx:idx+1].copy()
+        self.ref_joint_vel = self.motion_joint_vel[idx:idx+1].copy()
+        self.ref_body_quat_w = self.motion_body_quat_w[idx:idx+1].copy()  # (1, num_bodies, 4)
 
     def _print_metadata(self):
         """打印 ONNX metadata 摘要"""
@@ -309,76 +350,21 @@ class OnnxPolicy:
                 else:
                     print(f"  {key}: {val}")
 
-    def _load_npz_reference(self, npz_path):
-        """从 NPZ 文件加载参考轨迹（joint_pos, joint_vel, body_quat_w）"""
-        if not os.path.isfile(npz_path):
-            print(f"  ✗ NPZ 文件不存在: {npz_path}")
-            return
-
-        print(f"\n═══ 加载 NPZ 参考轨迹 ═══")
-        data = np.load(npz_path, allow_pickle=True)
-        print(f"  可用字段: {list(data.keys())}")
-
-        # 加载 joint_pos
-        if "joint_pos" in data:
-            jp = data["joint_pos"].astype(np.float32)
-            # 判断关节顺序：如果 shape 是 (num_frames, 29) 则直接使用
-            if jp.ndim == 2 and jp.shape[1] >= NUM_JOINTS:
-                self.npz_ref = self.npz_ref or {}
-                # 默认假设 NPZ 是 policy order（与训练环境一致）
-                self.npz_ref["joint_pos"] = jp[:, :NUM_JOINTS]
-                print(f"  ✓ joint_pos: shape={jp.shape}, 范围=[{jp.min():.3f}, {jp.max():.3f}]")
-            else:
-                print(f"  ⚠ joint_pos shape 异常: {jp.shape}")
-        else:
-            print(f"  ⚠ NPZ 无 joint_pos 字段")
-
-        # 加载 joint_vel
-        if "joint_vel" in data:
-            jv = data["joint_vel"].astype(np.float32)
-            if jv.ndim == 2 and jv.shape[1] >= NUM_JOINTS:
-                self.npz_ref = self.npz_ref or {}
-                self.npz_ref["joint_vel"] = jv[:, :NUM_JOINTS]
-                print(f"  ✓ joint_vel: shape={jv.shape}, 范围=[{jv.min():.3f}, {jv.max():.3f}]")
-
-        # 加载 body_quat_w（base_link 通常是第一个 body）
-        if "body_quat_w" in data:
-            bq = data["body_quat_w"].astype(np.float32)
-            self.npz_ref = self.npz_ref or {}
-            if bq.ndim == 3:
-                # (num_frames, num_bodies, 4) → 取第一个 body (base_link)
-                self.npz_ref["body_quat_w"] = bq[:, 0, :]
-                print(f"  ✓ body_quat_w: shape={bq.shape}, 取 base_link (body 0)")
-            elif bq.ndim == 2:
-                self.npz_ref["body_quat_w"] = bq
-                print(f"  ✓ body_quat_w: shape={bq.shape}")
-
-        num_frames = len(self.npz_ref.get("joint_pos", [])) if self.npz_ref else 0
-        print(f"  参考帧数: {num_frames}")
-
     def reset(self):
         """重置所有内部状态"""
         self.step = 0
         self.last_action_policy = np.zeros(NUM_JOINTS, dtype=np.float32)
 
-        # 参考轨迹（优先从 NPZ 获取，否则从 ONNX 输出获取）
-        if self.npz_ref and "joint_pos" in self.npz_ref:
-            self.ref_joint_pos = self.npz_ref["joint_pos"][0:1].copy()
-        else:
-            self.ref_joint_pos = DEFAULT_JOINT_POS_MOTOR[POLICY_TO_MOTOR_IDX].reshape(1, -1).copy()
-
-        if self.npz_ref and "joint_vel" in self.npz_ref:
-            self.ref_joint_vel = self.npz_ref["joint_vel"][0:1].copy()
-        else:
-            self.ref_joint_vel = np.zeros((1, NUM_JOINTS), dtype=np.float32)
-
-        if self.npz_ref and "body_quat_w" in self.npz_ref:
-            self.ref_body_quat_w = self.npz_ref["body_quat_w"][0].copy()  # (4,) flat
-        else:
-            self.ref_body_quat_w = None
-
+        # 参考轨迹（从 NPZ 获取，如果没有 NPZ 则用默认站立姿态）
+        self.ref_joint_pos = DEFAULT_JOINT_POS_MOTOR[POLICY_TO_MOTOR_IDX].reshape(1, -1).copy()
+        self.ref_joint_vel = np.zeros((1, NUM_JOINTS), dtype=np.float32)
+        self.ref_body_quat_w = None
         self.world_to_init_rot = np.eye(3, dtype=np.float64)
         self._init_calibrated = False
+
+        # 如果有 NPZ，初始化第一帧参考
+        if self.motion_total_steps > 0:
+            self._get_ref_at_step(0)
 
         # 历史缓冲区
         self.gravity_hist = deque(maxlen=HISTORY_LENGTH)
@@ -430,7 +416,7 @@ class OnnxPolicy:
         """校准初始旋转（yaw-only 对齐）"""
         if self._init_calibrated or self.ref_body_quat_w is None:
             return
-        ref_quat = self.ref_body_quat_w  # shape (4,)
+        ref_quat = self.ref_body_quat_w[0, self.anchor_body_index]  # shape (4,)
         init_to_anchor_rot = quat_to_mat(yaw_quat(ref_quat))
         world_to_anchor_rot = quat_to_mat(yaw_quat(robot_quat))
         self.world_to_init_rot = world_to_anchor_rot @ init_to_anchor_rot.T
@@ -441,7 +427,7 @@ class OnnxPolicy:
         if self.ref_body_quat_w is None:
             # 初始状态，无参考轨迹，返回零
             return np.zeros(6, dtype=np.float32)
-        ref_quat = self.ref_body_quat_w  # shape (4,)
+        ref_quat = self.ref_body_quat_w[0, self.anchor_body_index]  # shape (4,)
         rot_inv = quat_to_mat(robot_quat).T
         ref_rot = quat_to_mat(ref_quat)
         rot_b = rot_inv @ self.world_to_init_rot @ ref_rot
@@ -534,7 +520,6 @@ class OnnxPolicy:
         # anchor orientation
         self._calibrate_init_rotation(base_quat.astype(np.float32))
         anchor_ori_obs = self._get_anchor_ori_b(base_quat.astype(np.float32))
-        anchor_ori_obs = np.zeros(6, dtype=np.float32)  # DEBUG: disable anchor_ori
 
         # 命令
         command = np.concatenate([
@@ -590,27 +575,11 @@ class OnnxPolicy:
         actions_motor = np.zeros(NUM_JOINTS, dtype=np.float32)
         actions_motor[POLICY_TO_MOTOR_IDX] = target_policy
 
-        # 更新参考轨迹（优先从 NPZ 获取，否则从 ONNX 输出获取）
-        if self.npz_ref and "joint_pos" in self.npz_ref:
-            frame_idx = min(self.step, len(self.npz_ref["joint_pos"]) - 1)
-            self.ref_joint_pos = self.npz_ref["joint_pos"][frame_idx:frame_idx+1].copy()
-            if "joint_vel" in self.npz_ref:
-                self.ref_joint_vel = self.npz_ref["joint_vel"][frame_idx:frame_idx+1].copy()
-            if "body_quat_w" in self.npz_ref:
-                self.ref_body_quat_w = self.npz_ref["body_quat_w"][frame_idx].copy()  # (4,) flat
-        else:
-            # 从 ONNX 输出获取参考轨迹
-            if "joint_pos" in output_dict:
-                self.ref_joint_pos = output_dict["joint_pos"].reshape(1, -1)[:, :NUM_JOINTS].astype(np.float32)
-            if "joint_vel" in output_dict:
-                self.ref_joint_vel = output_dict["joint_vel"].reshape(1, -1)[:, :NUM_JOINTS].astype(np.float32)
-            if "body_quat_w" in output_dict:
-                bq = output_dict["body_quat_w"]
-                if bq.ndim == 2:
-                    bq = bq.reshape(1, -1, 4)
-                self.ref_body_quat_w = bq[0, 0].astype(np.float32)
-
+        # 推进参考轨迹步数（从 NPZ 读取下一帧）
         self.step += 1
+        if self.motion_total_steps > 0:
+            self._get_ref_at_step(self.step)
+
         return actions_motor
 
     def compute_torques(self, q_motor, dq_motor, target_pos_motor):
@@ -693,13 +662,12 @@ def run_simulation(policy, model_path, total_steps=None, gui=True):
     if gui:
         try:
             viewer = mujoco.viewer.launch_passive(mj_model, mj_data)
+            # 相机设置：平视、适中距离
+            viewer.cam.lookat[:] = [0.0, 0.0, 0.7]   # 看向机器人腰部高度
+            viewer.cam.distance = 3.5                  # 距离 3.5m（适中）
+            viewer.cam.elevation = -5                  # 略微俯视（-5°，接近平视）
+            viewer.cam.azimuth = 90                    # 侧面视角
             print(f"  ✓ MuJoCo 可视化窗口已打开（关闭窗口结束仿真，实时速率={realtime_factor}x）")
-
-            # 设置视角：侧后方 45 度，平视
-            viewer.cam.azimuth = 135
-            viewer.cam.elevation = -10
-            viewer.cam.distance = 5.0
-            viewer.cam.lookat[:] = [0, 0, 0.8]
         except Exception as e:
             print(f"  ⚠ 无法打开可视化窗口: {e}")
             print("  继续无 GUI 仿真...")
@@ -809,7 +777,7 @@ def main():
     )
     parser.add_argument("--onnx", required=True, help="ONNX 模型文件路径")
     parser.add_argument("--motion", default=None,
-                        help="参考动作 NPZ 文件路径（可选，ONNX 已内嵌参考轨迹）")
+                        help="参考动作 NPZ 文件路径（omni_mimic 框架必须指定）")
     parser.add_argument("--model", default="omni_29dof_mjc/mjcf/omni_29dof.xml",
                         help="MuJoCo MJCF 模型路径")
     parser.add_argument("--no_gui", action="store_true", help="不打开可视化窗口")
@@ -835,8 +803,8 @@ def main():
     if args.motion:
         print(f"  NPZ:  {args.motion}")
 
-    # 创建策略（传入 NPZ 参考轨迹）
-    policy = OnnxPolicy(args.onnx, action_scale_val=args.action_scale, motion_npz_path=args.motion)
+    # 创建策略
+    policy = OnnxPolicy(args.onnx, motion_path=args.motion, action_scale_val=args.action_scale)
 
     # 运行仿真
     result = run_simulation(policy, model_path, total_steps=args.steps, gui=not args.no_gui)
