@@ -223,7 +223,9 @@ for actuator_cfg in OMNI_DCMOTOR_IDENTIFIED_CFG.actuators.values():
     actuator_cfg.velocity_limit_sim = actuator_cfg.velocity_limit
 
 OMNI_DCMOTOR_IDENTIFIED_ACTION_SCALE = {
-    joint: 0.25
+    joint: 0.5  # 2026-08-16: 0.25→0.5 对齐 SDK high_dynamic.yaml action.scale=0.5
+    # 0.25 导致策略位置偏移仅 ±0.25rad, 电机无法产生爆发起跳;
+    # 0.5 与部署 SDK 一致, 满足"训练 obs=部署 obs"铁律
     for joint in [
         "hip_pitch_l_joint",
         "hip_roll_l_joint",

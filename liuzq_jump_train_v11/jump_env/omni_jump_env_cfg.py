@@ -246,9 +246,9 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
             # 2026-08-15: 增强腾空高度 weight 5→10 + 超线性(excess+excess², 函数内实现)。
             # max_excess 0.8 上限覆盖到 base 1.6m。目标 apex 1.05m(参考 0.961)。
             # 2026-08-16: 突破局部最优, 9->15 强制策略探索起跳
-            # 2026-08-16: threshold 0.79->0.82, 杜绝蹭阈值, 必须真正离地 3cm+
+            # 2026-08-16: threshold 0.79->0.82->0.80, 与 _jump_gate(0.80) 对齐消除死区
             weight=20.0,
-            params={"command_name": "motion", "threshold": 0.82, "scale": 1.0, "max_excess": 0.8},
+            params={"command_name": "motion", "threshold": 0.80, "scale": 1.0, "max_excess": 0.8},
         )
         # 起跳爆发速度(jump_mask 窗口)
         self.rewards.takeoff_vertical_vel = RewTerm(
@@ -278,7 +278,7 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
                     ],
                 ),
                 "max_ext_vel": 4.0,
-                "threshold": 0.82,
+                "threshold": 0.80,
             },
         )
         # 提前起跳惩罚(first_jump_frame=57 之前)

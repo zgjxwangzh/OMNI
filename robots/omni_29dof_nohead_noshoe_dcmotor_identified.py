@@ -223,7 +223,7 @@ for actuator_cfg in OMNI_DCMOTOR_IDENTIFIED_CFG.actuators.values():
     actuator_cfg.velocity_limit_sim = actuator_cfg.velocity_limit
 
 OMNI_DCMOTOR_IDENTIFIED_ACTION_SCALE = {
-    joint: 0.25
+    joint: 0.5  # 2026-08-16: 0.25→0.5 对齐 SDK high_dynamic.yaml action.scale=0.5
     for joint in [
         "hip_pitch_l_joint",
         "hip_roll_l_joint",
