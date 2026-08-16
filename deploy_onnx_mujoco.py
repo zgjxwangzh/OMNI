@@ -373,7 +373,7 @@ class OnnxPolicy:
             self.ref_joint_vel = np.zeros((1, NUM_JOINTS), dtype=np.float32)
 
         if self.npz_ref and "body_quat_w" in self.npz_ref:
-            self.ref_body_quat_w = self.npz_ref["body_quat_w"][0:1].copy()
+            self.ref_body_quat_w = self.npz_ref["body_quat_w"][0].copy()  # (4,) flat
         else:
             self.ref_body_quat_w = None
 
@@ -597,7 +597,7 @@ class OnnxPolicy:
             if "joint_vel" in self.npz_ref:
                 self.ref_joint_vel = self.npz_ref["joint_vel"][frame_idx:frame_idx+1].copy()
             if "body_quat_w" in self.npz_ref:
-                self.ref_body_quat_w = self.npz_ref["body_quat_w"][frame_idx:frame_idx+1].copy()
+                self.ref_body_quat_w = self.npz_ref["body_quat_w"][frame_idx].copy()  # (4,) flat
         else:
             # 从 ONNX 输出获取参考轨迹
             if "joint_pos" in output_dict:
