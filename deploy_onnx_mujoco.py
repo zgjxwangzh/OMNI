@@ -191,8 +191,13 @@ def verify_mujoco_joint_order(model):
 class OnnxPolicy:
     """封装 ONNX 推理 + 观测构建，与 high_dynamic_policy.py 逻辑一致"""
 
-    def __init__(self, onnx_path, default_pos_motor=None, action_scale_val=None):
+    def __init__(self, onnx_path, default_pos_motor=None, action_scale_val=None, motion_npz_path=None):
         self.onnx_path = onnx_path
+
+        # 加载 NPZ 参考轨迹（如果提供）
+        self.npz_ref = None
+        if motion_npz_path is not None:
+            self._load_npz_reference(motion_npz_path)
 
         # 加载 ONNX metadata
         print(f"\n═══ 加载 ONNX 模型 ═══")
@@ -304,15 +309,74 @@ class OnnxPolicy:
                 else:
                     print(f"  {key}: {val}")
 
+    def _load_npz_reference(self, npz_path):
+        """从 NPZ 文件加载参考轨迹（joint_pos, joint_vel, body_quat_w）"""
+        if not os.path.isfile(npz_path):
+            print(f"  ✗ NPZ 文件不存在: {npz_path}")
+            return
+
+        print(f"\n═══ 加载 NPZ 参考轨迹 ═══")
+        data = np.load(npz_path, allow_pickle=True)
+        print(f"  可用字段: {list(data.keys())}")
+
+        # 加载 joint_pos
+        if "joint_pos" in data:
+            jp = data["joint_pos"].astype(np.float32)
+            # 判断关节顺序：如果 shape 是 (num_frames, 29) 则直接使用
+            if jp.ndim == 2 and jp.shape[1] >= NUM_JOINTS:
+                self.npz_ref = self.npz_ref or {}
+                # 默认假设 NPZ 是 policy order（与训练环境一致）
+                self.npz_ref["joint_pos"] = jp[:, :NUM_JOINTS]
+                print(f"  ✓ joint_pos: shape={jp.shape}, 范围=[{jp.min():.3f}, {jp.max():.3f}]")
+            else:
+                print(f"  ⚠ joint_pos shape 异常: {jp.shape}")
+        else:
+            print(f"  ⚠ NPZ 无 joint_pos 字段")
+
+        # 加载 joint_vel
+        if "joint_vel" in data:
+            jv = data["joint_vel"].astype(np.float32)
+            if jv.ndim == 2 and jv.shape[1] >= NUM_JOINTS:
+                self.npz_ref = self.npz_ref or {}
+                self.npz_ref["joint_vel"] = jv[:, :NUM_JOINTS]
+                print(f"  ✓ joint_vel: shape={jv.shape}, 范围=[{jv.min():.3f}, {jv.max():.3f}]")
+
+        # 加载 body_quat_w（base_link 通常是第一个 body）
+        if "body_quat_w" in data:
+            bq = data["body_quat_w"].astype(np.float32)
+            self.npz_ref = self.npz_ref or {}
+            if bq.ndim == 3:
+                # (num_frames, num_bodies, 4) → 取第一个 body (base_link)
+                self.npz_ref["body_quat_w"] = bq[:, 0, :]
+                print(f"  ✓ body_quat_w: shape={bq.shape}, 取 base_link (body 0)")
+            elif bq.ndim == 2:
+                self.npz_ref["body_quat_w"] = bq
+                print(f"  ✓ body_quat_w: shape={bq.shape}")
+
+        num_frames = len(self.npz_ref.get("joint_pos", [])) if self.npz_ref else 0
+        print(f"  参考帧数: {num_frames}")
+
     def reset(self):
         """重置所有内部状态"""
         self.step = 0
         self.last_action_policy = np.zeros(NUM_JOINTS, dtype=np.float32)
 
-        # 参考轨迹（从 ONNX 输出获取）
-        self.ref_joint_pos = DEFAULT_JOINT_POS_MOTOR[POLICY_TO_MOTOR_IDX].reshape(1, -1).copy()
-        self.ref_joint_vel = np.zeros((1, NUM_JOINTS), dtype=np.float32)
-        self.ref_body_quat_w = None
+        # 参考轨迹（优先从 NPZ 获取，否则从 ONNX 输出获取）
+        if self.npz_ref and "joint_pos" in self.npz_ref:
+            self.ref_joint_pos = self.npz_ref["joint_pos"][0:1].copy()
+        else:
+            self.ref_joint_pos = DEFAULT_JOINT_POS_MOTOR[POLICY_TO_MOTOR_IDX].reshape(1, -1).copy()
+
+        if self.npz_ref and "joint_vel" in self.npz_ref:
+            self.ref_joint_vel = self.npz_ref["joint_vel"][0:1].copy()
+        else:
+            self.ref_joint_vel = np.zeros((1, NUM_JOINTS), dtype=np.float32)
+
+        if self.npz_ref and "body_quat_w" in self.npz_ref:
+            self.ref_body_quat_w = self.npz_ref["body_quat_w"][0:1].copy()
+        else:
+            self.ref_body_quat_w = None
+
         self.world_to_init_rot = np.eye(3, dtype=np.float64)
         self._init_calibrated = False
 
@@ -526,18 +590,25 @@ class OnnxPolicy:
         actions_motor = np.zeros(NUM_JOINTS, dtype=np.float32)
         actions_motor[POLICY_TO_MOTOR_IDX] = target_policy
 
-        # 更新参考轨迹（从 ONNX 输出）
-        if "joint_pos" in output_dict:
-            self.ref_joint_pos = output_dict["joint_pos"].reshape(1, -1)[:, :NUM_JOINTS].astype(np.float32)
-        if "joint_vel" in output_dict:
-            self.ref_joint_vel = output_dict["joint_vel"].reshape(1, -1)[:, :NUM_JOINTS].astype(np.float32)
-        if "body_quat_w" in output_dict:
-            bq = output_dict["body_quat_w"]
-            # 找到 base_link 的索引（通常是第一个 body）
-            if bq.ndim == 2:
-                bq = bq.reshape(1, -1, 4)
-            # 提取 anchor body (base_link) 的四元数，形状 (4,)
-            self.ref_body_quat_w = bq[0, 0].astype(np.float32)
+        # 更新参考轨迹（优先从 NPZ 获取，否则从 ONNX 输出获取）
+        if self.npz_ref and "joint_pos" in self.npz_ref:
+            frame_idx = min(self.step, len(self.npz_ref["joint_pos"]) - 1)
+            self.ref_joint_pos = self.npz_ref["joint_pos"][frame_idx:frame_idx+1].copy()
+            if "joint_vel" in self.npz_ref:
+                self.ref_joint_vel = self.npz_ref["joint_vel"][frame_idx:frame_idx+1].copy()
+            if "body_quat_w" in self.npz_ref:
+                self.ref_body_quat_w = self.npz_ref["body_quat_w"][frame_idx:frame_idx+1].copy()
+        else:
+            # 从 ONNX 输出获取参考轨迹
+            if "joint_pos" in output_dict:
+                self.ref_joint_pos = output_dict["joint_pos"].reshape(1, -1)[:, :NUM_JOINTS].astype(np.float32)
+            if "joint_vel" in output_dict:
+                self.ref_joint_vel = output_dict["joint_vel"].reshape(1, -1)[:, :NUM_JOINTS].astype(np.float32)
+            if "body_quat_w" in output_dict:
+                bq = output_dict["body_quat_w"]
+                if bq.ndim == 2:
+                    bq = bq.reshape(1, -1, 4)
+                self.ref_body_quat_w = bq[0, 0].astype(np.float32)
 
         self.step += 1
         return actions_motor
@@ -764,8 +835,8 @@ def main():
     if args.motion:
         print(f"  NPZ:  {args.motion}")
 
-    # 创建策略
-    policy = OnnxPolicy(args.onnx, action_scale_val=args.action_scale)
+    # 创建策略（传入 NPZ 参考轨迹）
+    policy = OnnxPolicy(args.onnx, action_scale_val=args.action_scale, motion_npz_path=args.motion)
 
     # 运行仿真
     result = run_simulation(policy, model_path, total_steps=args.steps, gui=not args.no_gui)
