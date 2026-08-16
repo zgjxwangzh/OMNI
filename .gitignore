@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# ONNX / 模型文件（太大）
+*.onnx
+*.pt
+*.pth
+
+# NPZ 文件（二进制，但重定向输出需要版本管理）
+# retargeted/*.npz
+# training_data/*.npz
+
+# 日志和 TensorBoard
+logs/
+runs/
+*.tfevents.*
+
+# 视频
+*.mp4
+*.avi
+
+# 系统文件
+.DS_Store
+._*
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# IsaacLab 外部依赖（太大）
+IsaacLab/
+omni_rl_sdk/
+omni_29dof_mjc/
+
+# omni_mimic 太大，但需要跟踪修改过的文件
+# 用 ! 排除特定文件
+omni_mimic/*
+!omni_mimic/source/whole_body_tracking/whole_body_tracking/tasks/tracking/tracking_env_omni_cfg.py
+
+# 临时文件
+tempshell.txt
