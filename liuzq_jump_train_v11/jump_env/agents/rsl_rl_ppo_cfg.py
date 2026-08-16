@@ -58,11 +58,11 @@ class OmniJumpPPORunnerCfg(RslRlOnPolicyRunnerCfg):
             value_loss_coef=1.0,
             use_clipped_value_loss=True,
             clip_param=0.2,
-            entropy_coef=0.002,
+            entropy_coef=0.005,  # 2026-08-16: 0.002→0.005, 增强探索防止策略过早固化
             num_learning_epochs=5,
             num_mini_batches=4,
             learning_rate=1.0e-3,
-            schedule="adaptive",
+            schedule="fixed",  # 2026-08-16: adaptive→fixed, 防止 lr 降到 0 导致策略停止探索
             gamma=0.9801,  # 0.99²: 频率折半, 每步对应更长真实时间, 折扣按真实时间折算
             lam=0.9025,  # 0.95²
             desired_kl=0.01,
