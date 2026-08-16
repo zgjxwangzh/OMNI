@@ -246,9 +246,8 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
             # 2026-08-15: 增强腾空高度 weight 5→10 + 超线性(excess+excess², 函数内实现)。
             # max_excess 0.8 上限覆盖到 base 1.6m。目标 apex 1.05m(参考 0.961)。
             # 2026-08-16: 突破局部最优, 9->15 强制策略探索起跳
-            # 2026-08-17: 100->80, 降低跳高激励, 让策略在"高"和"稳"之间找平衡
-            # 解决 leg_symmetry/flight_yaw 持续恶化、空中侧倾问题
-            weight=80.0,
+            # 2026-08-17: 80->60, 进一步降低, leg_symmetry 在 80 下仍持续恶化 (-0.45→-0.50)
+            weight=60.0,
             params={"command_name": "motion", "threshold": 0.79, "scale": 1.0, "max_excess": 0.8},
         )
         # 起跳爆发速度(jump_mask 窗口)
@@ -257,8 +256,8 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
             # 2026-08-15: max_vel 1.8→2.3(1.8=参考峰值, 达到就满奖, 无梯度冲更高;
             # 目标 apex 1.05m 需起跳速度 2.3 m/s, 打开超参考的冲高梯度)
             # 2026-08-16: 突破局部最优, 9->12 强化起跳爆发梯度
-            # 2026-08-17: 50->40, 同步降低起跳速度激励, 配合 jump_height_bonus 调整
-            weight=40.0,
+            # 2026-08-17: 40->30, 同步降低, 配合 jump_height_bonus 进一步调整
+            weight=30.0,
             params={"command_name": "motion", "vel_thresh": 0.3, "max_vel": 2.3},
         )
         # 2026-08-14 新增: 推蹬段奖励双腿快速伸展(膝/髋伸直), 教爆发起跳
