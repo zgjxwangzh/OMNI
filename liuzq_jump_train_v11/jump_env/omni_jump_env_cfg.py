@@ -43,7 +43,7 @@ from jump_env.mdp.commands import JumpMotionCommand
 from jump_env.mdp.obs529 import obs529
 # V11: V7 终止函数(bad_anchor_ori/fell/out_of_bounds, jump_high vendored mdp 没有)
 from jump_env.mdp.v7_terminations import bad_anchor_ori, fell, out_of_bounds
-# V11: V7 奖励栈(26 项, 见 v7_rewards.py)。jump_high 原自定义奖励(jump_phase_rewards/
+# V11: V7 奖励栈(27 项, 见 v7_rewards.py)。jump_high 原自定义奖励(jump_phase_rewards/
 # jump_rewards)已全部移除, 换成 V7 算法。
 from jump_env.mdp.v7_rewards import (
     arm_back_penalty,
@@ -67,6 +67,7 @@ from jump_env.mdp.v7_rewards import (
     torso_backward_lean_penalty,
     torso_roll_penalty,
     track_dof_pos_exp,
+    track_dof_vel_exp,
     track_root_ori_exp,
     track_yaw_exp,
     tuck_bonus,
@@ -182,7 +183,7 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
         if hasattr(self.events, "push_robot"):
             self.events.push_robot = None
 
-        # --- V11: V7 奖励栈(26 项, 唯一栈) ---
+        # --- V11: V7 奖励栈(27 项, 唯一栈) ---
         # 移植自 my_omni_jump_train_v7/omni_jump_tasks_v7/jump_env_cfg.py 的 RewardsCfg。
         # 帧号/高度阈值已按 jump_high 参考(183帧/50fps, base 峰值 0.961m, 腾空 115~132)
         # 重标定。jump_high 原自定义奖励(motion_*/takeoff_completion/standing_*/airborne_*)
@@ -191,6 +192,10 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
         # -- 模仿跟踪
         self.rewards.track_dof_pos = RewTerm(
             func=track_dof_pos_exp, weight=3.0, params={"command_name": "motion", "std": 0.5}
+        )
+        # 2026-08-17 新增: 关节速度跟踪, 治速度误差全面恶化(策略用暴力动作换高度)
+        self.rewards.track_dof_vel = RewTerm(
+            func=track_dof_vel_exp, weight=1.5, params={"command_name": "motion", "std": 3.0}
         )
         self.rewards.track_root_ori = RewTerm(
             func=track_root_ori_exp, weight=2.0, params={"command_name": "motion", "std": 0.4}
@@ -246,9 +251,9 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
             # 2026-08-15: 增强腾空高度 weight 5→10 + 超线性(excess+excess², 函数内实现)。
             # max_excess 0.8 上限覆盖到 base 1.6m。目标 apex 1.05m(参考 0.961)。
             # 2026-08-16: 突破局部最优, 9->15 强制策略探索起跳
-            # 2026-08-17: 80->60, 进一步降低跳高激励
-            # 80/40 跑了 200 步后 leg_symmetry 从 -0.45 恶化到 -0.50, 说明仍不够低
-            weight=60.0,
+            # 2026-08-17 09:40: 60->35, pre_jump_foot_motion 加速恶化(-0.57→-1.72/800步),
+            # 策略用暴力脚部动作换高度, 超线性奖励让惩罚永远追不上, 必须降源头激励
+            weight=35.0,
             params={"command_name": "motion", "threshold": 0.79, "scale": 1.0, "max_excess": 0.8},
         )
         # 起跳爆发速度(jump_mask 窗口)
@@ -257,8 +262,8 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
             # 2026-08-15: max_vel 1.8→2.3(1.8=参考峰值, 达到就满奖, 无梯度冲更高;
             # 目标 apex 1.05m 需起跳速度 2.3 m/s, 打开超参考的冲高梯度)
             # 2026-08-16: 突破局部最优, 9->12 强化起跳爆发梯度
-            # 2026-08-17: 40->30, 同步降低, 配合 jump_height_bonus 调整
-            weight=30.0,
+            # 2026-08-17 09:40: 30->18, 配合 jump_height_bonus 降源头, 策略在"猛蹬"而非"协调蹬"
+            weight=18.0,
             params={"command_name": "motion", "vel_thresh": 0.3, "max_vel": 2.3},
         )
         # 2026-08-14 新增: 推蹬段奖励双腿快速伸展(膝/髋伸直), 教爆发起跳
@@ -384,8 +389,8 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
         # (参考 npz 起跳前脚踝 z 恒 0.033 贴地/下蹲段脚速≤0.05, 碎步是策略自学的)
         self.rewards.pre_jump_foot_motion_penalty = RewTerm(
             func=pre_jump_foot_motion_penalty,
-            # 2026-08-17: -2→-5, 加强起跳前脚步约束
-            weight=-5.0,
+            # 2026-08-17 09:40: -5->-15, 3倍加强, -5完全压不住(-0.57→-1.72加速恶化)
+            weight=-15.0,
             params={
                 "command_name": "motion",
                 "asset_cfg": SceneEntityCfg(
@@ -496,8 +501,8 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
         # 推蹬段罚左右腿发力不一致(髋/膝伸展速度差), 治腾空扭转(参考差 0 零冲突)
         self.rewards.takeoff_leg_symmetry_penalty = RewTerm(
             func=takeoff_leg_symmetry_penalty,
-            # 2026-08-17: -2→-8, 加强 4 倍, 起跳对称性仍然很差 (takeoff_leg_symmetry -0.61)
-            weight=-8.0,
+            # 2026-08-17 09:40: -8->-15, 接近翻倍, -8后仍从-1.33恶化到-1.51
+            weight=-15.0,
             params={
                 "command_name": "motion",
                 "asset_cfg": SceneEntityCfg(

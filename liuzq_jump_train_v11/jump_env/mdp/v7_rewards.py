@@ -116,6 +116,20 @@ def track_dof_pos_exp(env: "ManagerBasedRLEnv", command_name: str, std: float = 
     return torch.exp(-error / std**2)
 
 
+def track_dof_vel_exp(env: "ManagerBasedRLEnv", command_name: str, std: float = 3.0) -> torch.Tensor:
+    """关节速度跟踪奖励: 参考 joint_vel vs 机器人关节速度, 平均平方误差 exp 核。
+
+    2026-08-17 新增: TensorBoard 显示 error_joint_vel≈22(23 关节 norm), 四个速度误差
+    (anchor_lin_vel/body_lin_vel/anchor_ang_vel/body_ang_vel) 全面恶化, 根因是奖励栈
+    中没有任何速度跟踪项——track_dof_pos 只管位置不管节奏。策略用"暴力动作换高度"时
+    速度自然偏离参考。加此奖励让策略在追高度的同时保持参考动作的速度节奏。
+    std=3.0: 单关节速度误差 1.5 rad/s → MSE≈2.25 → exp(-2.25/9)≈0.78, 有梯度。
+    """
+    command: "MotionCommand" = env.command_manager.get_term(command_name)
+    error = torch.mean(torch.square(command.joint_vel - command.robot.data.joint_vel), dim=-1)
+    return torch.exp(-error / std**2)
+
+
 def track_root_ori_exp(env: "ManagerBasedRLEnv", command_name: str, std: float = 0.4) -> torch.Tensor:
     """基座姿态跟踪(参考 anchor_quat_w vs 机器人基座姿态)。"""
     command: "MotionCommand" = env.command_manager.get_term(command_name)
@@ -641,6 +655,7 @@ def landing_balance_bonus(
 
 __all__ = [
     "track_dof_pos_exp",
+    "track_dof_vel_exp",
     "track_root_ori_exp",
     "track_yaw_exp",
     "jump_height_bonus",
