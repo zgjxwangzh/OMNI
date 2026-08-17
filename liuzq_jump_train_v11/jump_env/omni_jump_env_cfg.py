@@ -226,6 +226,9 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
             },
         )
         # 胳膊跟踪(非饱和, 平均误差)
+        # 2026-08-17 V11第三轮: 加入 wrist 4 关节, 解决起跳时手腕角度诡异问题。
+        # 根因: wrist_pitch/wrist_roll 不在 arm_tracking 的 10 关节列表中,
+        # 且 HTM4438_30 执行器 kp=5/kd=1 极弱, 策略可随意摆弄手腕不受惩罚。
         self.rewards.arm_tracking = RewTerm(
             func=arm_tracking_exp,
             weight=2.0,
@@ -236,8 +239,10 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
                     joint_names=[
                         "shoulder_pitch_l_joint", "shoulder_roll_l_joint", "shoulder_yaw_l_joint",
                         "elbow_pitch_l_joint", "elbow_yaw_l_joint",
+                        "wrist_pitch_l_joint", "wrist_roll_l_joint",
                         "shoulder_pitch_r_joint", "shoulder_roll_r_joint", "shoulder_yaw_r_joint",
                         "elbow_pitch_r_joint", "elbow_yaw_r_joint",
+                        "wrist_pitch_r_joint", "wrist_roll_r_joint",
                     ],
                 ),
                 "std": 0.3,
