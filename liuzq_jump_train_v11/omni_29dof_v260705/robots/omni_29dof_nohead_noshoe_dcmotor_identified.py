@@ -67,7 +67,8 @@ OMNI_DCMOTOR_IDENTIFIED_CFG_TEMP = ArticulationCfg(
             saturation_effort=HRA88P_22_5.saturation_torque,
             effort_limit=HRA88P_22_5.peak_torque,
             velocity_limit=HRA88P_22_5.peak_velocity,
-            stiffness=120,
+            # 2026-08-18: 对齐官方 SDK env-omni31.yaml real kp/kd (sim2sim 必须)
+            stiffness=150,
             damping=5,
             armature={
                 "hip_pitch_l_joint": 0.025875279679894447,
@@ -109,7 +110,8 @@ OMNI_DCMOTOR_IDENTIFIED_CFG_TEMP = ArticulationCfg(
             saturation_effort=HRA88P_14_3.saturation_torque,
             effort_limit=HRA88P_14_3.peak_torque,
             velocity_limit=HRA88P_14_3.peak_velocity,
-            stiffness=100,
+            # 2026-08-18: 对齐官方 SDK env-omni31.yaml real kp/kd (sim2sim 必须)
+            stiffness=150,
             damping=5,
             armature={
                 "hip_yaw_l_joint": 0.056901562958955765,
@@ -173,8 +175,10 @@ OMNI_DCMOTOR_IDENTIFIED_CFG_TEMP = ArticulationCfg(
             saturation_effort=HRA55P.saturation_torque * 2,
             effort_limit=HRA55P.peak_torque * 2,
             velocity_limit=HRA55P.peak_velocity,
-            stiffness=120.0,
-            damping=5.0,
+            # 2026-08-18: 对齐官方 SDK env-omni31.yaml real kp/kd (sim2sim 必须)
+            # 之前 120/5 是 real 的 2.4 倍, 导致腰部在真机上过度摆动
+            stiffness=50.0,
+            damping=2.5,
             armature=HRA55P.armature * 2,
             friction=HRA55P.peak_torque * 2 * 0.05,
             dynamic_friction=HRA55P.peak_torque * 2 * 0.04,
@@ -207,8 +211,9 @@ OMNI_DCMOTOR_IDENTIFIED_CFG_TEMP = ArticulationCfg(
             saturation_effort=HTM4438_30.saturation_torque,
             effort_limit=HTM4438_30.peak_torque,
             velocity_limit=HTM4438_30.peak_velocity,
-            stiffness=5.0,
-            damping=1.0,
+            # 2026-08-18: 对齐官方 SDK env-omni31.yaml real kp/kd (sim2sim 必须)
+            stiffness=40.0,
+            damping=2.0,
             armature=HTM4438_30.armature,
             friction=HTM4438_30.peak_torque * 0.05,
             dynamic_friction=HTM4438_30.peak_torque * 0.04,
