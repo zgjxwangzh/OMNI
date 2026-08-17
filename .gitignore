@@ -35,7 +35,8 @@ Thumbs.db
 # IsaacLab 外部依赖（太大）
 IsaacLab/
 omni_rl_sdk/
-omni_29dof_mjc/
+omni_29dof_mjc/*
+!omni_29dof_mjc/mjcf/
 
 # omni_mimic 太大，但需要跟踪修改过的文件
 # 用 ! 排除特定文件

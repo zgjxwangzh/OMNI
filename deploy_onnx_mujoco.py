@@ -99,25 +99,25 @@ DEFAULT_JOINT_POS_MOTOR = np.array([
     0.300, 0.0, 0.0, -0.700, 0.0, 0.0, 0.0,    # 右臂
 ], dtype=np.float32)
 
-# PD 增益（motor order，精确对齐官方 SDK env-omni31.yaml sim 列）
-# 2026-08-18 v2: 修正上一版错误 — 之前误读 high_dynamic.yaml(策略输出值)
-#   而非 env-omni31.yaml(MuJoCo 环境实际值)
-# hip_pitch/roll: 150/5 | knee_pitch: 200/5 | hip_yaw/waist_yaw: 150/100
-# ankle: 20/2 | waist_roll/pitch: 100/5(sim) | shoulder/elbow: 50/2 | wrist: 40/2
-KP_MOTOR = np.array([
-    150.0, 150.0, 150.0, 200.0, 20.0, 20.0,
-    150.0, 150.0, 150.0, 200.0, 20.0, 20.0,
-    100.0, 100.0, 100.0,
-    50.0, 50.0, 50.0, 50.0, 50.0, 40.0, 40.0,
-    50.0, 50.0, 50.0, 50.0, 50.0, 40.0, 40.0,
+# 2026-08-18 v3: 改用 <position> 执行器后，PD 增益由 MJCF 内置
+# kp/kd 写入 omni_29dof.xml 的 <position kp= kv=> 属性
+# 来自 SDK high_dynamic.yaml (策略运行时实际输出值, 非 env-omni31.yaml sim 列)
+# deploy 脚本只需设 ctrl = target_pos，MuJoCo 内置位置伺服自动计算力矩
+# 以下保留为参考，不再用于力矩计算
+_KP_MOTOR_REF = np.array([
+    150.0, 150.0, 150.0, 150.0, 30.0, 30.0,
+    150.0, 150.0, 150.0, 150.0, 30.0, 30.0,
+    150.0, 150.0, 150.0,
+    100.0, 100.0, 50.0, 50.0, 50.0, 20.0, 20.0,
+    100.0, 100.0, 50.0, 50.0, 50.0, 20.0, 20.0,
 ], dtype=np.float32)
 
-KD_MOTOR = np.array([
-    5.0, 5.0, 5.0, 5.0, 2.0, 2.0,
-    5.0, 5.0, 5.0, 5.0, 2.0, 2.0,
+_KD_MOTOR_REF = np.array([
+    5.0, 5.0, 5.0, 5.0, 3.0, 3.0,
+    5.0, 5.0, 5.0, 5.0, 3.0, 3.0,
     5.0, 5.0, 5.0,
-    2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
-    2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
+    2.0, 2.0, 2.0, 2.0, 2.0, 1.0, 1.0,
+    2.0, 2.0, 2.0, 2.0, 2.0, 1.0, 1.0,
 ], dtype=np.float32)
 
 # 控制参数
@@ -237,46 +237,10 @@ class OnnxPolicy:
         # 避免除零
         self.action_scale_policy[self.action_scale_policy == 0.0] = 1.0
 
-        # PD 增益（motor order）— 用于 compute_torques 的力矩计算
-        self.kps_motor = KP_MOTOR.copy()
-        self.kds_motor = KD_MOTOR.copy()
-        print(f"  KP_motor 范围: [{self.kps_motor.min():.0f}, {self.kps_motor.max():.0f}]")
-        print(f"  KD_motor 范围: [{self.kds_motor.min():.0f}, {self.kds_motor.max():.0f}]")
-
-        # PD 增益（policy order）— 用于 ONNX metadata 覆盖
-        # 优先从 ONNX metadata 读取（joint_stiffness/joint_damping 是 policy order）
-        if "joint_stiffness" in self.meta and isinstance(self.meta["joint_stiffness"], np.ndarray):
-            kp_meta = self.meta["joint_stiffness"]
-            if len(kp_meta) == NUM_JOINTS:
-                self.kps_policy = kp_meta.copy()
-                # 同步更新 motor order
-                self.kps_motor = np.zeros(NUM_JOINTS, dtype=np.float32)
-                self.kps_motor[POLICY_TO_MOTOR_IDX] = self.kps_policy
-                print(f"  ✓ 使用 ONNX metadata 中的 joint_stiffness (policy order)")
-            else:
-                self.kps_policy = KP_MOTOR[POLICY_TO_MOTOR_IDX]
-                print(f"  ⚠ metadata joint_stiffness 长度不匹配，使用 SDK real 值")
-        else:
-            self.kps_policy = KP_MOTOR[POLICY_TO_MOTOR_IDX]
-            print(f"  ⚠ ONNX 无 joint_stiffness metadata，使用 SDK real 值")
-
-        if "joint_damping" in self.meta and isinstance(self.meta["joint_damping"], np.ndarray):
-            kd_meta = self.meta["joint_damping"]
-            if len(kd_meta) == NUM_JOINTS:
-                self.kds_policy = kd_meta.copy()
-                # 同步更新 motor order
-                self.kds_motor = np.zeros(NUM_JOINTS, dtype=np.float32)
-                self.kds_motor[POLICY_TO_MOTOR_IDX] = self.kds_policy
-                print(f"  ✓ 使用 ONNX metadata 中的 joint_damping (policy order)")
-            else:
-                self.kds_policy = KD_MOTOR[POLICY_TO_MOTOR_IDX]
-                print(f"  ⚠ metadata joint_damping 长度不匹配，使用 SDK real 值")
-        else:
-            self.kds_policy = KD_MOTOR[POLICY_TO_MOTOR_IDX]
-            print(f"  ⚠ ONNX 无 joint_damping metadata，使用 SDK real 值")
-
-        print(f"  最终 KP_motor: [{self.kps_motor.min():.0f}, {self.kps_motor.max():.0f}]")
-        print(f"  最终 KD_motor: [{self.kds_motor.min():.0f}, {self.kds_motor.max():.0f}]")
+        # 2026-08-18 v3: 改用 <position> 执行器后不再需要外部 PD 计算
+        # MJCF 中的 <position kp= kv=> 已内置位置伺服
+        print(f"  执行器模式: <position> (MuJoCo 内置位置伺服)")
+        print(f"  kp/kd 由 MJCF 属性控制，无需外部 PD 计算")
 
         # 初始化 ONNX session
         print(f"\n  初始化 ONNXRuntime session...")
@@ -596,13 +560,7 @@ class OnnxPolicy:
 
         return actions_motor
 
-    def compute_torques(self, q_motor, dq_motor, target_pos_motor):
-        """PD 控制计算力矩（全部使用 motor order）"""
-        error_pos = target_pos_motor - q_motor[:NUM_JOINTS]
-        error_vel = -dq_motor[:NUM_JOINTS]
-        # 2026-08-18: 修复 bug — 之前误用 kps_policy(policy order) 乘 motor order 的 error
-        torques = self.kps_motor * error_pos + self.kds_motor * error_vel
-        return torques.astype(np.float32)
+    # compute_torques 已移除 — <position> 执行器由 MuJoCo 内置伺服控制
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -711,9 +669,9 @@ def run_simulation(policy, model_path, total_steps=None, gui=True):
             target_pos_motor = policy.get_action(inputs)
             actions_log.append(target_pos_motor.copy())
 
-        # PD 力矩控制
-        torques = policy.compute_torques(q_motor, dq_motor, target_pos_motor)
-        mj_data.ctrl[:NUM_JOINTS] = torques
+        # 2026-08-18 v3: <position> 执行器 — ctrl 直接设为目标位置
+        # MuJoCo 内置位置伺服: force = kp*(ctrl-q) - kv*dq
+        mj_data.ctrl[:NUM_JOINTS] = target_pos_motor
 
         # 仿真步进
         mujoco.mj_step(mj_model, mj_data)
