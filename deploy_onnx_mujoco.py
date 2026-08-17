@@ -99,22 +99,23 @@ DEFAULT_JOINT_POS_MOTOR = np.array([
     0.300, 0.0, 0.0, -0.700, 0.0, 0.0, 0.0,    # 右臂
 ], dtype=np.float32)
 
-# PD 增益（motor order，对齐官方 SDK env-omni31.yaml real 值）
-# 2026-08-18: 从旧值(120/100/5)更新为 SDK real 值 — sim2sim 必须
-# hip_pitch/roll, knee: 150/5 | hip_yaw, waist_yaw: 150/5 | ankle: 30/3
-# waist_roll/pitch: 50/2.5 | shoulder/elbow: 50/2 | wrist: 40/2
+# PD 增益（motor order，精确对齐官方 SDK env-omni31.yaml sim 列）
+# 2026-08-18 v2: 修正上一版错误 — 之前误读 high_dynamic.yaml(策略输出值)
+#   而非 env-omni31.yaml(MuJoCo 环境实际值)
+# hip_pitch/roll: 150/5 | knee_pitch: 200/5 | hip_yaw/waist_yaw: 150/100
+# ankle: 20/2 | waist_roll/pitch: 100/5(sim) | shoulder/elbow: 50/2 | wrist: 40/2
 KP_MOTOR = np.array([
-    150.0, 150.0, 150.0, 150.0, 30.0, 30.0,
-    150.0, 150.0, 150.0, 150.0, 30.0, 30.0,
-    150.0, 50.0, 50.0,
+    150.0, 150.0, 150.0, 200.0, 20.0, 20.0,
+    150.0, 150.0, 150.0, 200.0, 20.0, 20.0,
+    100.0, 100.0, 100.0,
     50.0, 50.0, 50.0, 50.0, 50.0, 40.0, 40.0,
     50.0, 50.0, 50.0, 50.0, 50.0, 40.0, 40.0,
 ], dtype=np.float32)
 
 KD_MOTOR = np.array([
-    5.0, 5.0, 5.0, 5.0, 3.0, 3.0,
-    5.0, 5.0, 5.0, 5.0, 3.0, 3.0,
-    5.0, 2.5, 2.5,
+    5.0, 5.0, 5.0, 5.0, 2.0, 2.0,
+    5.0, 5.0, 5.0, 5.0, 2.0, 2.0,
+    5.0, 5.0, 5.0,
     2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
     2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0,
 ], dtype=np.float32)

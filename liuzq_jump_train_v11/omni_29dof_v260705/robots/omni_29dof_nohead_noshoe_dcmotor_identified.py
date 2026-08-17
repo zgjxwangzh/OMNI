@@ -60,14 +60,15 @@ OMNI_DCMOTOR_IDENTIFIED_CFG_TEMP = ArticulationCfg(
     ),
     soft_joint_pos_limit_factor=0.9,
     actuators={
-        "HRA88P_22_5": DelayedDCMotorCfg(
+        # 2026-08-18 v2: 拆分 hip 和 knee — SDK env sim kp 不同(150 vs 200)
+        "HRA88P_22_5_hip": DelayedDCMotorCfg(
             min_delay=2,
             max_delay=5,
-            joint_names_expr=["hip_pitch_.*", "hip_roll_.*", "knee_pitch_.*"],
+            joint_names_expr=["hip_pitch_.*", "hip_roll_.*"],
             saturation_effort=HRA88P_22_5.saturation_torque,
             effort_limit=HRA88P_22_5.peak_torque,
             velocity_limit=HRA88P_22_5.peak_velocity,
-            # 2026-08-18: 对齐官方 SDK env-omni31.yaml real kp/kd (sim2sim 必须)
+            # 对齐 SDK env-omni31.yaml sim: hip_pitch/roll = 150/5
             stiffness=150,
             damping=5,
             armature={
@@ -75,62 +76,101 @@ OMNI_DCMOTOR_IDENTIFIED_CFG_TEMP = ArticulationCfg(
                 "hip_pitch_r_joint": 0.025875279679894447,
                 "hip_roll_l_joint": 0.05765285715460777,
                 "hip_roll_r_joint": 0.05765285715460777,
-                "knee_pitch_l_joint": 0.06578928977251053,
-                "knee_pitch_r_joint": 0.06578928977251053,
             },
             friction={
                 "hip_pitch_l_joint": 0.4877849817276001,
                 "hip_pitch_r_joint": 0.4877849817276001,
                 "hip_roll_l_joint": 2.492764472961426,
                 "hip_roll_r_joint": 2.492764472961426,
-                "knee_pitch_l_joint": 0.9012159705162048,
-                "knee_pitch_r_joint": 0.9012159705162048,
             },
             dynamic_friction={
                 "hip_pitch_l_joint": 0.4877849817276001,
                 "hip_pitch_r_joint": 0.4877849817276001,
                 "hip_roll_l_joint": 2.492764472961426,
                 "hip_roll_r_joint": 2.492764472961426,
-                "knee_pitch_l_joint": 0.9012159705162048,
-                "knee_pitch_r_joint": 0.9012159705162048,
             },
             viscous_friction={
                 "hip_pitch_l_joint": 1.5534991025924683,
                 "hip_pitch_r_joint": 1.5534991025924683,
                 "hip_roll_l_joint": 1.3765937089920044,
                 "hip_roll_r_joint": 1.3765937089920044,
+            },
+        ),
+        "HRA88P_22_5_knee": DelayedDCMotorCfg(
+            min_delay=2,
+            max_delay=5,
+            joint_names_expr=["knee_pitch_.*"],
+            saturation_effort=HRA88P_22_5.saturation_torque,
+            effort_limit=HRA88P_22_5.peak_torque,
+            velocity_limit=HRA88P_22_5.peak_velocity,
+            # 对齐 SDK env-omni31.yaml sim: knee_pitch = 200/5
+            stiffness=200,
+            damping=5,
+            armature={
+                "knee_pitch_l_joint": 0.06578928977251053,
+                "knee_pitch_r_joint": 0.06578928977251053,
+            },
+            friction={
+                "knee_pitch_l_joint": 0.9012159705162048,
+                "knee_pitch_r_joint": 0.9012159705162048,
+            },
+            dynamic_friction={
+                "knee_pitch_l_joint": 0.9012159705162048,
+                "knee_pitch_r_joint": 0.9012159705162048,
+            },
+            viscous_friction={
                 "knee_pitch_l_joint": 0.9860152006149292,
                 "knee_pitch_r_joint": 0.9860152006149292,
             },
         ),
-        "HRA88P_14_3": DelayedDCMotorCfg(
+        # 2026-08-18 v2: 拆分 hip_yaw 和 waist_yaw — SDK env sim kp 不同(150 vs 100)
+        "HRA88P_14_3_hip_yaw": DelayedDCMotorCfg(
             min_delay=2,
             max_delay=5,
-            joint_names_expr=["hip_yaw_.*", "waist_yaw_joint"],
+            joint_names_expr=["hip_yaw_.*"],
             saturation_effort=HRA88P_14_3.saturation_torque,
             effort_limit=HRA88P_14_3.peak_torque,
             velocity_limit=HRA88P_14_3.peak_velocity,
-            # 2026-08-18: 对齐官方 SDK env-omni31.yaml real kp/kd (sim2sim 必须)
+            # 对齐 SDK env-omni31.yaml sim: hip_yaw = 150/5
             stiffness=150,
             damping=5,
             armature={
                 "hip_yaw_l_joint": 0.056901562958955765,
                 "hip_yaw_r_joint": 0.056901562958955765,
-                "waist_yaw_joint": HRA88P_14_3.armature,
             },
             friction={
                 "hip_yaw_l_joint": 0.01984378695487976,
                 "hip_yaw_r_joint": 0.01984378695487976,
-                "waist_yaw_joint": HRA88P_14_3.peak_torque * 0.05,
             },
             dynamic_friction={
                 "hip_yaw_l_joint": 0.01984378695487976,
                 "hip_yaw_r_joint": 0.01984378695487976,
-                "waist_yaw_joint": HRA88P_14_3.peak_torque * 0.04,
             },
             viscous_friction={
                 "hip_yaw_l_joint": 1.678580641746521,
                 "hip_yaw_r_joint": 1.678580641746521,
+            },
+        ),
+        "HRA88P_14_3_waist_yaw": DelayedDCMotorCfg(
+            min_delay=2,
+            max_delay=5,
+            joint_names_expr=["waist_yaw_joint"],
+            saturation_effort=HRA88P_14_3.saturation_torque,
+            effort_limit=HRA88P_14_3.peak_torque,
+            velocity_limit=HRA88P_14_3.peak_velocity,
+            # 对齐 SDK env-omni31.yaml sim: waist_yaw = 100/5
+            stiffness=100,
+            damping=5,
+            armature={
+                "waist_yaw_joint": HRA88P_14_3.armature,
+            },
+            friction={
+                "waist_yaw_joint": HRA88P_14_3.peak_torque * 0.05,
+            },
+            dynamic_friction={
+                "waist_yaw_joint": HRA88P_14_3.peak_torque * 0.04,
+            },
+            viscous_friction={
                 "waist_yaw_joint": 0.5,
             },
         ),
@@ -141,8 +181,9 @@ OMNI_DCMOTOR_IDENTIFIED_CFG_TEMP = ArticulationCfg(
             saturation_effort=HRA58P.saturation_torque * 2,
             effort_limit=HRA58P.peak_torque * 2,
             velocity_limit=HRA58P.peak_velocity,
-            stiffness=30.0,
-            damping=3.0,
+            # 对齐 SDK env-omni31.yaml sim: ankle = 20/2 (之前 30/3 偏大)
+            stiffness=20.0,
+            damping=2.0,
             armature={
                 "ankle_pitch_l_joint": 0.010765427723526955,
                 "ankle_pitch_r_joint": 0.010765427723526955,
@@ -175,10 +216,10 @@ OMNI_DCMOTOR_IDENTIFIED_CFG_TEMP = ArticulationCfg(
             saturation_effort=HRA55P.saturation_torque * 2,
             effort_limit=HRA55P.peak_torque * 2,
             velocity_limit=HRA55P.peak_velocity,
-            # 2026-08-18: 对齐官方 SDK env-omni31.yaml real kp/kd (sim2sim 必须)
-            # 之前 120/5 是 real 的 2.4 倍, 导致腰部在真机上过度摆动
-            stiffness=50.0,
-            damping=2.5,
+            # 2026-08-18 v2: 对齐 SDK env-omni31.yaml sim kp/kd (sim 用 100/5)
+            # real 用 50/2.5, 但训练环境应匹配 sim 值
+            stiffness=100.0,
+            damping=5.0,
             armature=HRA55P.armature * 2,
             friction=HRA55P.peak_torque * 2 * 0.05,
             dynamic_friction=HRA55P.peak_torque * 2 * 0.04,
