@@ -245,7 +245,7 @@ class OmniJumpEnvCfg(TrackingEnvCfg):
                         "wrist_pitch_r_joint", "wrist_roll_r_joint",
                     ],
                 ),
-                "std": 0.3,
+                "std": 0.2,  # 2026-08-17 V11第四轮: 0.3→0.2 收紧手臂跟踪, 解决起跳前/落地后手掌朝上问题
             },
         )
 
