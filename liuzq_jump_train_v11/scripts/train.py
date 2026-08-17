@@ -167,9 +167,28 @@ def main():
     env_cfg.log_dir = log_dir
 
     # -- resolve resume checkpoint before creating a new log dir
+    # 2026-08-18: 绕过 get_checkpoint_path 的路径匹配 bug, 直接构造路径
     resume_path = None
     if agent_cfg.resume:
-        resume_path = get_checkpoint_path(log_root_path, agent_cfg.load_run, agent_cfg.load_checkpoint)
+        _lr = agent_cfg.load_run
+        _ck = agent_cfg.load_checkpoint or "model.pt"
+        if os.path.isabs(_lr):
+            # 绝对路径: 直接用
+            _run_dir = _lr
+        elif os.path.sep in _lr:
+            # 含分隔符(如 "logs/rsl_rl/xxx"): 相对 CWD 解析
+            _run_dir = os.path.abspath(_lr)
+        else:
+            # 纯目录名(如 "2026-08-17_01-47-39"): 在 log_root_path 下查找
+            _run_dir = os.path.join(log_root_path, _lr)
+        resume_path = os.path.join(_run_dir, _ck)
+        if not os.path.isfile(resume_path):
+            raise FileNotFoundError(
+                f"Resume checkpoint not found: {resume_path}\n"
+                f"  load_run={_lr}, checkpoint={_ck}\n"
+                f"  Hint: run `ls {_run_dir}` to verify available checkpoints."
+            )
+        print(f"[INFO]: Resolved resume path: {resume_path}")
 
     # -- create isaac environment
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
