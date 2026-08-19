@@ -105,15 +105,23 @@ cp omni_mimic/source/whole_body_tracking/whole_body_tracking/tasks/tracking/trac
 ### 步骤 2：从 model_3000.pt resume
 
 ```bash
-isaaclab.sh -p omni_mimic/scripts/rsl_rl/train.py \
+/root/autodl-tmp/IsaacLab/isaaclab.sh -p omni_mimic/scripts/rsl_rl/train.py \
     --task=Tracking-Flat-Omni-Hist-Delayed-DCMotor-v0 \
     --num_envs=4096 \
-    --max_iterations=10000 \
-    --resume \
+    --motion_file training_data/跑步01_chr00_training.npz \
+    --max_iterations=20000 \
+    --resume=true \
     --load_run 2026-08-13_21-27-53_running01_fk_fix \
     --checkpoint model_3000.pt \
-    --run_name running_resume_from_3k
+    --run_name running_resume_from_3k \
+    agent.save_interval=100
 ```
+
+注意：
+- `isaaclab.sh` 使用绝对路径 `/root/autodl-tmp/IsaacLab/isaaclab.sh`
+- `--resume=true`（带 `=true`）
+- `--max_iterations=20000`（从 3000 步继续，总共到 20000）
+- `agent.save_interval=100`（每 100 步保存一次 checkpoint）
 
 ### 步骤 3：监控
 
