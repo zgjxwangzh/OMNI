@@ -1,6 +1,8 @@
 <mujoco model="omni_29dof">
     <compiler angle="radian" meshdir="../meshes/" />
-    <option timestep='0.001' iterations='50' solver='PGS' gravity='0 0 -9.81'>
+    <!-- 2026-08-18: Euler→implicitfast。训练端 PhysX 为隐式积分，显式 Euler 在接触瞬间
+         数值刚性不足导致落地炸开；implicitfast 是 MuJoCo 官方推荐的接触场景折中方案 -->
+    <option timestep='0.0025' iterations='20' solver='Newton' integrator='implicitfast' gravity='0 0 -9.81'>
     </option>
 
     <size njmax="500" nconmax="100" />
@@ -79,7 +81,9 @@
     <worldbody>
         <light directional="true" diffuse=".4 .4 .4" specular="0.1 0.1 0.1" pos="0 0 5.0" dir="0 0 -1" castshadow="false"/>
         <light directional="true" diffuse=".6 .6 .6" specular="0.2 0.2 0.2" pos="0 0 4" dir="0 0 -1"/>
-        <geom name="ground" type="plane" size="0 0 1" pos="0.001 0 0" quat="1 0 0 0" material="matplane" condim="1" conaffinity='15'/>
+        <!-- 2026-08-18: 地面加柔顺 solref(PhysX 惩罚式接触本质是软接触)。
+             原默认 solref='0.001 2' 时间常数低于 2*timestep 下限, 接触过硬且数值不利 -->
+        <geom name="ground" type="plane" size="0 0 1" pos="0.001 0 0" quat="1 0 0 0" material="matplane" condim="3" conaffinity='15' friction="1.0 0.005 0.0001" solref="0.01 2"/>
 
         <body name="base_link" pos="0 0 0.82">
             <inertial pos="-0.002612 -0.00019 -0.086412" quat="0.999571 -0.00805369 0.0273493 -0.00663456" mass="4.1989" diaginertia="0.0137719 0.0105848 0.00896926" />
@@ -90,29 +94,29 @@
             
             <body name="hip_pitch_l_link" pos="0 0.071415 -0.11836" quat="0.996195 -0.0871543 0 0">
                 <inertial pos="0.001201 0.047439 -0.008501" quat="0.916538 0.398367 0.0160231 0.0317123" mass="1.46844" diaginertia="0.00165452 0.00143466 0.00129782" />
-                <joint name="hip_pitch_l_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-2.6864 2.6864" armature="0.01"/>
+                <joint name="hip_pitch_l_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-2.6864 2.6864" armature="0.025875" damping="1.5535"/>
                 <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="hip_pitch_l_link" />
                 <body name="hip_roll_l_link" pos="0 0.05 -0.01" quat="0.996195 0.0871543 0 0">
                     <inertial pos="-9e-06 0.000803 -0.075664" quat="0.999997 -0.00187262 7.2021e-07 0.0015528" mass="1.74932" diaginertia="0.003371 0.003049 0.00251499" />
-                    <joint name="hip_roll_l_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-0.52 2.96" armature="0.01"/>
+                    <joint name="hip_roll_l_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-0.52 2.96" armature="0.057653" damping="1.3766"/>
                     <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="hip_roll_l_link" />
                     <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="hip_roll_l_link" />
                     <body name="hip_yaw_l_link" pos="0 0 -0.124">
                         <inertial pos="-0.001969 -0.001663 -0.13348" quat="0.693212 0.0405118 0.0504946 0.71782" mass="1.9475" diaginertia="0.00973762 0.00927267 0.00189071" />
-                        <joint name="hip_yaw_l_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-2.75 2.75" armature="0.01"/>
+                        <joint name="hip_yaw_l_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-2.75 2.75" armature="0.056902" damping="1.6786"/>
                         <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="hip_yaw_l_link" />
                         <body name="knee_pitch_l_link" pos="-0.01 0 -0.17583">
                             <inertial pos="0.006799 0.001024 -0.128089" quat="0.624884 -0.0334084 -0.00588348 0.77998" mass="2.18725" diaginertia="0.0123738 0.0122973 0.00187694" />
-                            <joint name="knee_pitch_l_joint" pos="0 0 0" axis="0 1 0" limited="true" range="0 2.87" armature="0.01"/>
+                            <joint name="knee_pitch_l_joint" pos="0 0 0" axis="0 1 0" limited="true" range="0 2.87" armature="0.065789" damping="0.9860"/>
                             <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="knee_pitch_l_link" />
                             <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="knee_pitch_l_link" />
                             <body name="ankle_pitch_l_link" pos="0.01 0 -0.3">
                                 <inertial pos="-4e-05 1.3e-05 -0.005175" quat="0.707107 0 0 0.707107" mass="0.029227" diaginertia="4e-06 3e-06 2e-06" />
-                                <joint name="ankle_pitch_l_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-0.87 0.52" armature="0.01"/>
+                                <joint name="ankle_pitch_l_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-0.87 0.52" armature="0.010765" damping="0.8179"/>
                                 <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="ankle_pitch_l_link" />
                                 <body name="ankle_roll_l_link" pos="0 0 -0.017">
                                     <inertial pos="0.031796 1e-06 -0.019813" quat="0 0.714416 0 0.699722" mass="0.579486" diaginertia="0.00179467 0.001629 0.000254335" />
-                                    <joint name="ankle_roll_l_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-0.26 0.26" armature="0.01"/>
+                                    <joint name="ankle_roll_l_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-0.26 0.26" armature="0.106086" damping="0.8722"/>
                                     <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="ankle_roll_l_link" />
                                     <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="ankle_roll_l_link" />
                                     
@@ -124,29 +128,29 @@
             </body>
             <body name="hip_pitch_r_link" pos="0 -0.071415 -0.11836" quat="0.996195 0.0871543 0 0">
                 <inertial pos="0.001201 -0.047439 -0.008501" quat="0.398367 0.916538 -0.0317123 -0.0160231" mass="1.46844" diaginertia="0.00165452 0.00143466 0.00129782" />
-                <joint name="hip_pitch_r_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-2.6864 2.6864" armature="0.01"/>
+                <joint name="hip_pitch_r_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-2.6864 2.6864" armature="0.025875" damping="1.5535"/>
                 <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="hip_pitch_r_link" />
                 <body name="hip_roll_r_link" pos="0 -0.05 -0.01" quat="0.996195 -0.0871543 0 0">
                     <inertial pos="-9e-06 -0.000803 -0.075664" quat="0.999997 0.00187262 7.2021e-07 -0.0015528" mass="1.74932" diaginertia="0.003371 0.003049 0.00251499" />
-                    <joint name="hip_roll_r_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-2.96 0.52" armature="0.01"/>
+                    <joint name="hip_roll_r_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-2.96 0.52" armature="0.057653" damping="1.3766"/>
                     <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="hip_roll_r_link" />
                     <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="hip_roll_r_link" />
                     <body name="hip_yaw_r_link" pos="0 0 -0.124">
                         <inertial pos="-0.001969 0.001663 -0.13348" quat="0.71782 0.0504946 0.0405118 0.693212" mass="1.9475" diaginertia="0.00973762 0.00927267 0.00189071" />
-                        <joint name="hip_yaw_r_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-2.75 2.75" armature="0.01"/>
+                        <joint name="hip_yaw_r_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-2.75 2.75" armature="0.056902" damping="1.6786"/>
                         <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="hip_yaw_r_link" />
                         <body name="knee_pitch_r_link" pos="-0.01 0 -0.17583">
                             <inertial pos="0.006799 -0.001024 -0.128089" quat="0.77998 -0.00588348 -0.0334084 0.624884" mass="2.18725" diaginertia="0.0123738 0.0122973 0.00187694" />
-                            <joint name="knee_pitch_r_joint" pos="0 0 0" axis="0 1 0" limited="true" range="0 2.87" armature="0.01"/>
+                            <joint name="knee_pitch_r_joint" pos="0 0 0" axis="0 1 0" limited="true" range="0 2.87" armature="0.065789" damping="0.9860"/>
                             <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="knee_pitch_r_link" />
                             <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="knee_pitch_r_link" />
                             <body name="ankle_pitch_r_link" pos="0.01 0 -0.3">
                                 <inertial pos="-4e-05 -1.3e-05 -0.005175" quat="0.707107 0 0 0.707107" mass="0.029227" diaginertia="4e-06 3e-06 2e-06" />
-                                <joint name="ankle_pitch_r_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-0.87 0.52" armature="0.01"/>
+                                <joint name="ankle_pitch_r_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-0.87 0.52" armature="0.010765" damping="0.8179"/>
                                 <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="ankle_pitch_r_link" />
                                 <body name="ankle_roll_r_link" pos="0 0 -0.017">
                                     <inertial pos="0.031796 -1e-06 -0.019813" quat="0 0.714416 0 0.699722" mass="0.579486" diaginertia="0.00179467 0.001629 0.000254335" />
-                                    <joint name="ankle_roll_r_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-0.26 0.26" armature="0.01"/>
+                                    <joint name="ankle_roll_r_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-0.26 0.26" armature="0.106086" damping="0.8722"/>
                                     <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="ankle_roll_r_link" />
                                     <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="ankle_roll_r_link" />
                                     
@@ -158,15 +162,15 @@
             </body>
             <body name="waist_yaw_link" pos="0 0 0.024">
                 <inertial pos="-0.012851 3.8e-05 -0.016808" quat="0 0.689043 0 0.72472" mass="0.13587" diaginertia="0.000131202 9.4e-05 5.1798e-05" />
-                <joint name="waist_yaw_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-2.7 2.7" armature="0.01"/>
+                <joint name="waist_yaw_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-2.7 2.7" armature="0.020000" damping="0.5000"/>
                 <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="waist_yaw_link" />
                 <body name="waist_roll_link" pos="0 0 0">
                     <inertial pos="0 0 0" quat="0 0.707107 0 0.707107" mass="0.0497" diaginertia="6e-06 5e-06 3e-06" />
-                    <joint name="waist_roll_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-0.52 0.52" armature="0.01"/>
+                    <joint name="waist_roll_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-0.52 0.52" armature="0.040000" damping="0.5000"/>
                     <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="waist_roll_link" />
                     <body name="waist_pitch_link" pos="0 0 0">
                         <inertial pos="-0.004197 0.006107 0.164915" quat="0.999936 0.00173993 -0.00921721 0.00629482" mass="8.7262" diaginertia="0.0958253 0.0770635 0.0387741" />
-                        <joint name="waist_pitch_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-0.52 0.52" armature="0.01"/>
+                        <joint name="waist_pitch_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-0.52 0.52" armature="0.040000" damping="0.5000"/>
                         <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="waist_pitch_link" />
                         <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="waist_pitch_link" />
                         <body name="head_yaw_link" pos="0.0005 0 0.3946">
@@ -182,34 +186,34 @@
                         </body>
                         <body name="shoulder_pitch_l_link" pos="0.0005 0.10224 0.26336" quat="0.996195 0.0871543 0 0">
                             <inertial pos="-0.001502 0.048155 -0.021241" quat="0.668327 0.310506 -0.217669 0.639958" mass="0.753708" diaginertia="0.00066529 0.000630797 0.000537913" />
-                            <joint name="shoulder_pitch_l_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-3.14 2.7" armature="0.01"/>
+                            <joint name="shoulder_pitch_l_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-3.14 2.7" armature="0.010000" damping="0.2500"/>
                             <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="shoulder_pitch_l_link" />
                             <body name="shoulder_roll_l_link" pos="0 0.052 -0.025">
                                 <inertial pos="-0.001076 0.000199 -0.063921" quat="0.699294 -0.0481377 -0.04184 0.711984" mass="0.764372" diaginertia="0.00101805 0.000943716 0.000650237" />
-                                <joint name="shoulder_roll_l_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-0.52 2.355" armature="0.01"/>
+                                <joint name="shoulder_roll_l_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-0.52 2.355" armature="0.010000" damping="0.2500"/>
                                 <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="shoulder_roll_l_link" />
                                 <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="shoulder_roll_l_link" />
                                 <body name="shoulder_yaw_l_link" pos="0 0 -0.098">
                                     <inertial pos="0.01344 0.002074 -0.070134" quat="0.964918 0.0527454 -0.160631 -0.200871" mass="0.796084" diaginertia="0.00119489 0.00117455 0.000537552" />
-                                    <joint name="shoulder_yaw_l_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-2.61 2.61" armature="0.01"/>
+                                    <joint name="shoulder_yaw_l_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-2.61 2.61" armature="0.010000" damping="0.2500"/>
                                     <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="shoulder_yaw_l_link" />
                                     <body name="elbow_pitch_l_link" pos="0.02 -0.0005 -0.087" quat="0.999869 0 0.0161938 0">
                                         <inertial pos="-0.018865 0.002638 -0.060382" quat="0.506494 -0.0344502 0.209859 0.835606" mass="0.683885" diaginertia="0.000687608 0.000659505 0.000363888" />
-                                        <joint name="elbow_pitch_l_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-2.61 0.52" armature="0.01"/>
+                                        <joint name="elbow_pitch_l_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-2.61 0.52" armature="0.010000" damping="0.2500"/>
                                         <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="elbow_pitch_l_link" />
                                         <body name="elbow_yaw_l_link" pos="-0.02 0 -0.0995" quat="0.999997 0 0 0.0026291">
                                             <inertial pos="1e-06 -0.000376 -0.024406" quat="0.68927 0.724505 0 0" mass="0.086074" diaginertia="8.5e-05 7.00499e-05 4.99501e-05" />
-                                            <joint name="elbow_yaw_l_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-2.09 2.09" armature="0.01"/>
+                                            <joint name="elbow_yaw_l_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-2.09 2.09" armature="0.010000" damping="0.2500"/>
                                             <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="elbow_yaw_l_link" />
                                             <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="elbow_yaw_l_link" />
                                             <body name="wrist_pitch_l_link" pos="0 0 -0.0425" quat="1 0 6.3595e-05 0">
                                                 <inertial pos="-0.002306 -0.002375 -0.025615" quat="0.710831 0.0633836 -0.000825573 0.700501" mass="0.691229" diaginertia="0.000784141 0.000781798 0.000287061" />
-                                                <joint name="wrist_pitch_l_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-1.57 1.57" armature="0.01"/>
+                                                <joint name="wrist_pitch_l_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-1.57 1.57" armature="0.004000" damping="0.2500"/>
                                                 <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="wrist_pitch_l_link" />
                                                 <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="wrist_pitch_l_link" />
                                                 <body name="wrist_roll_l_link" pos="0 0 -0.051" quat="1 -6.3605e-05 0 0">
                                                     <inertial pos="0.001447 -0.001683 -0.067434" quat="0.729606 -0.0393121 0.00209733 0.682734" mass="0.253897" diaginertia="0.000449308 0.000385277 0.000162414" />
-                                                    <joint name="wrist_roll_l_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-1.57 1.57" armature="0.01"/>
+                                                    <joint name="wrist_roll_l_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-1.57 1.57" armature="0.004000" damping="0.2500"/>
                                                     <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="wrist_roll_l_link" />
                                                     <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="wrist_roll_l_link" />
                                                 </body>
@@ -221,34 +225,34 @@
                         </body>
                         <body name="shoulder_pitch_r_link" pos="0.0005 -0.10224 0.26336" quat="0.996195 -0.0871543 0 0">
                             <inertial pos="-0.001502 -0.048155 -0.021241" quat="0.639958 -0.217669 0.310506 0.668327" mass="0.753708" diaginertia="0.00066529 0.000630797 0.000537913" />
-                            <joint name="shoulder_pitch_r_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-3.14 2.7" armature="0.01"/>
+                            <joint name="shoulder_pitch_r_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-3.14 2.7" armature="0.010000" damping="0.2500"/>
                             <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="shoulder_pitch_r_link" />
                             <body name="shoulder_roll_r_link" pos="0 -0.052 -0.025">
                                 <inertial pos="-0.001076 -0.000199 -0.063921" quat="0.711984 -0.04184 -0.0481377 0.699294" mass="0.764372" diaginertia="0.00101805 0.000943716 0.000650237" />
-                                <joint name="shoulder_roll_r_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-2.355 0.52" armature="0.01"/>
+                                <joint name="shoulder_roll_r_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-2.355 0.52" armature="0.010000" damping="0.2500"/>
                                 <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="shoulder_roll_r_link" />
                                 <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="shoulder_roll_r_link" />
                                 <body name="shoulder_yaw_r_link" pos="0 0 -0.098">
                                     <inertial pos="0.01344 -0.002074 -0.070134" quat="0.964918 -0.0527454 -0.160631 0.200871" mass="0.796084" diaginertia="0.00119489 0.00117455 0.000537552" />
-                                    <joint name="shoulder_yaw_r_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-2.61 2.61" armature="0.01"/>
+                                    <joint name="shoulder_yaw_r_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-2.61 2.61" armature="0.010000" damping="0.2500"/>
                                     <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="shoulder_yaw_r_link" />
                                     <body name="elbow_pitch_r_link" pos="0.02 0.0005 -0.087" quat="0.999869 0 0.0161938 0">
                                         <inertial pos="-0.018865 -0.002638 -0.060382" quat="0.835606 0.209859 -0.0344502 0.506494" mass="0.683884" diaginertia="0.000687608 0.000659505 0.000363888" />
-                                        <joint name="elbow_pitch_r_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-2.61 0.52" armature="0.01"/>
+                                        <joint name="elbow_pitch_r_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-2.61 0.52" armature="0.010000" damping="0.2500"/>
                                         <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="elbow_pitch_r_link" />
                                         <body name="elbow_yaw_r_link" pos="-0.02 0 -0.0995" quat="0.999997 0 0 -0.0026282">
                                             <inertial pos="1e-06 0.000376 -0.024406" quat="0.724505 0.68927 0 0" mass="0.086074" diaginertia="8.5e-05 7.00499e-05 4.99501e-05" />
-                                            <joint name="elbow_yaw_r_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-2.09 2.09" armature="0.01"/>
+                                            <joint name="elbow_yaw_r_joint" pos="0 0 0" axis="0 0 1" limited="true" range="-2.09 2.09" armature="0.010000" damping="0.2500"/>
                                             <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="elbow_yaw_r_link" />
                                             <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="elbow_yaw_r_link" />
                                             <body name="wrist_pitch_r_link" pos="0 0 -0.0425" quat="1 0 6.3595e-05 0">
                                                 <inertial pos="-0.002306 0.002375 -0.025615" quat="0.700501 -0.000825573 0.0633836 0.710831" mass="0.691229" diaginertia="0.000784141 0.000781798 0.000287061" />
-                                                <joint name="wrist_pitch_r_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-1.57 1.57" armature="0.01"/>
+                                                <joint name="wrist_pitch_r_joint" pos="0 0 0" axis="0 1 0" limited="true" range="-1.57 1.57" armature="0.004000" damping="0.2500"/>
                                                 <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="wrist_pitch_r_link" />
                                                 <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="wrist_pitch_r_link" />
                                                 <body name="wrist_roll_r_link" pos="0 0 -0.051" quat="1 6.3605e-05 0 0">
                                                     <inertial pos="0.001447 0.001683 -0.067434" quat="0.682734 0.00209733 -0.0393121 0.729606" mass="0.253897" diaginertia="0.000449308 0.000385277 0.000162414" />
-                                                    <joint name="wrist_roll_r_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-1.57 1.57" armature="0.01"/>
+                                                    <joint name="wrist_roll_r_joint" pos="0 0 0" axis="1 0 0" limited="true" range="-1.57 1.57" armature="0.004000" damping="0.2500"/>
                                                     <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.752941 0.752941 0.752941 1" mesh="wrist_roll_r_link" />
                                                     <geom type="mesh" rgba="0.752941 0.752941 0.752941 1" mesh="wrist_roll_r_link" />
                                                 </body>
@@ -263,46 +267,45 @@
             </body>
         </body>
     </worldbody>
-    <!-- 2026-08-18: 改用 position 执行器，与 SDK omni_31.xml 一致 -->
-    <!-- kp/kd 来自 SDK high_dynamic.yaml (策略运行时实际输出值) -->
-    <!-- 注意: 这些值与 env-omni31.yaml sim 列不同! -->
-    <!--   knee: 150/5 (非200/5) | ankle: 30/3 (非20/2) -->
-    <!--   waist: 150/5 (非100/5) | shoulder: 100/2 (非50/2) -->
+    <!-- 2026-08-18: kp/kv/armature/damping/forcerange 全部对齐训练配置 -->
+    <!-- 来源: robots/omni_29dof_nohead_noshoe_dcmotor_identified.py (DelayedDCMotorCfg) -->
+    <!-- hip/knee=120/5 hip_yaw/waist_yaw=100/5 ankle=30/3 waist_rp=120/5 shoulder/elbow=50/2 wrist=5/1 -->
+    <!-- 关键修正: armature 从统一 0.01 改为逐关节辨识值(ankle_roll 0.106), 加 viscous damping -->
     <actuator>
         <!-- 左腿: hip=150/5, knee=150/5, ankle=30/3 -->
-        <position name="hip_pitch_l_joint" joint="hip_pitch_l_joint" kp="150.0" kv="5.0" ctrllimited="true" ctrlrange="-140 140"/>
-        <position name="hip_roll_l_joint" joint="hip_roll_l_joint" kp="150.0" kv="5.0" ctrllimited="true" ctrlrange="-140 140"/>
-        <position name="hip_yaw_l_joint" joint="hip_yaw_l_joint" kp="150.0" kv="5.0" ctrllimited="true" ctrlrange="-90 90"/>
-        <position name="knee_pitch_l_joint" joint="knee_pitch_l_joint" kp="150.0" kv="5.0" ctrllimited="true" ctrlrange="-140 140"/>
-        <position name="ankle_pitch_l_joint" joint="ankle_pitch_l_joint" kp="30.0" kv="3.0" ctrllimited="true" ctrlrange="-50 50"/>
-        <position name="ankle_roll_l_joint" joint="ankle_roll_l_joint" kp="30.0" kv="3.0" ctrllimited="true" ctrlrange="-50 50"/>
+        <position name="hip_pitch_l_joint" joint="hip_pitch_l_joint" kp="120.0" kv="5.0" ctrllimited="true" ctrlrange="-140 140" forcelimited="true" forcerange="-140 140"/>
+        <position name="hip_roll_l_joint" joint="hip_roll_l_joint" kp="120.0" kv="5.0" ctrllimited="true" ctrlrange="-140 140" forcelimited="true" forcerange="-140 140"/>
+        <position name="hip_yaw_l_joint" joint="hip_yaw_l_joint" kp="100.0" kv="5.0" ctrllimited="true" ctrlrange="-90 90" forcelimited="true" forcerange="-90 90"/>
+        <position name="knee_pitch_l_joint" joint="knee_pitch_l_joint" kp="120.0" kv="5.0" ctrllimited="true" ctrlrange="-140 140" forcelimited="true" forcerange="-140 140"/>
+        <position name="ankle_pitch_l_joint" joint="ankle_pitch_l_joint" kp="30.0" kv="3.0" ctrllimited="true" ctrlrange="-50 50" forcelimited="true" forcerange="-50 50"/>
+        <position name="ankle_roll_l_joint" joint="ankle_roll_l_joint" kp="30.0" kv="3.0" ctrllimited="true" ctrlrange="-50 50" forcelimited="true" forcerange="-50 50"/>
         <!-- 右腿 -->
-        <position name="hip_pitch_r_joint" joint="hip_pitch_r_joint" kp="150.0" kv="5.0" ctrllimited="true" ctrlrange="-140 140"/>
-        <position name="hip_roll_r_joint" joint="hip_roll_r_joint" kp="150.0" kv="5.0" ctrllimited="true" ctrlrange="-140 140"/>
-        <position name="hip_yaw_r_joint" joint="hip_yaw_r_joint" kp="150.0" kv="5.0" ctrllimited="true" ctrlrange="-90 90"/>
-        <position name="knee_pitch_r_joint" joint="knee_pitch_r_joint" kp="150.0" kv="5.0" ctrllimited="true" ctrlrange="-140 140"/>
-        <position name="ankle_pitch_r_joint" joint="ankle_pitch_r_joint" kp="30.0" kv="3.0" ctrllimited="true" ctrlrange="-50 50"/>
-        <position name="ankle_roll_r_joint" joint="ankle_roll_r_joint" kp="30.0" kv="3.0" ctrllimited="true" ctrlrange="-50 50"/>
+        <position name="hip_pitch_r_joint" joint="hip_pitch_r_joint" kp="120.0" kv="5.0" ctrllimited="true" ctrlrange="-140 140" forcelimited="true" forcerange="-140 140"/>
+        <position name="hip_roll_r_joint" joint="hip_roll_r_joint" kp="120.0" kv="5.0" ctrllimited="true" ctrlrange="-140 140" forcelimited="true" forcerange="-140 140"/>
+        <position name="hip_yaw_r_joint" joint="hip_yaw_r_joint" kp="100.0" kv="5.0" ctrllimited="true" ctrlrange="-90 90" forcelimited="true" forcerange="-90 90"/>
+        <position name="knee_pitch_r_joint" joint="knee_pitch_r_joint" kp="120.0" kv="5.0" ctrllimited="true" ctrlrange="-140 140" forcelimited="true" forcerange="-140 140"/>
+        <position name="ankle_pitch_r_joint" joint="ankle_pitch_r_joint" kp="30.0" kv="3.0" ctrllimited="true" ctrlrange="-50 50" forcelimited="true" forcerange="-50 50"/>
+        <position name="ankle_roll_r_joint" joint="ankle_roll_r_joint" kp="30.0" kv="3.0" ctrllimited="true" ctrlrange="-50 50" forcelimited="true" forcerange="-50 50"/>
         <!-- 腰部: 150/5 -->
-        <position name="waist_yaw_joint" joint="waist_yaw_joint" kp="150.0" kv="5.0" ctrllimited="true" ctrlrange="-90 90"/>
-        <position name="waist_roll_joint" joint="waist_roll_joint" kp="150.0" kv="5.0" ctrllimited="true" ctrlrange="-50 50"/>
-        <position name="waist_pitch_joint" joint="waist_pitch_joint" kp="150.0" kv="5.0" ctrllimited="true" ctrlrange="-50 50"/>
+        <position name="waist_yaw_joint" joint="waist_yaw_joint" kp="100.0" kv="5.0" ctrllimited="true" ctrlrange="-90 90" forcelimited="true" forcerange="-90 90"/>
+        <position name="waist_roll_joint" joint="waist_roll_joint" kp="120.0" kv="5.0" ctrllimited="true" ctrlrange="-50 50" forcelimited="true" forcerange="-110 110"/>
+        <position name="waist_pitch_joint" joint="waist_pitch_joint" kp="120.0" kv="5.0" ctrllimited="true" ctrlrange="-50 50" forcelimited="true" forcerange="-110 110"/>
         <!-- 左臂: shoulder=100/2, elbow=50/2, wrist=20/1 -->
-        <position name="shoulder_pitch_l_joint" joint="shoulder_pitch_l_joint" kp="100.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25"/>
-        <position name="shoulder_roll_l_joint" joint="shoulder_roll_l_joint" kp="100.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25"/>
-        <position name="shoulder_yaw_l_joint" joint="shoulder_yaw_l_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25"/>
-        <position name="elbow_pitch_l_joint" joint="elbow_pitch_l_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25"/>
-        <position name="elbow_yaw_l_joint" joint="elbow_yaw_l_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25"/>
-        <position name="wrist_pitch_l_joint" joint="wrist_pitch_l_joint" kp="20.0" kv="1.0" ctrllimited="true" ctrlrange="-10 10"/>
-        <position name="wrist_roll_l_joint" joint="wrist_roll_l_joint" kp="20.0" kv="1.0" ctrllimited="true" ctrlrange="-10 10"/>
+        <position name="shoulder_pitch_l_joint" joint="shoulder_pitch_l_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25" forcelimited="true" forcerange="-25 25"/>
+        <position name="shoulder_roll_l_joint" joint="shoulder_roll_l_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25" forcelimited="true" forcerange="-25 25"/>
+        <position name="shoulder_yaw_l_joint" joint="shoulder_yaw_l_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25" forcelimited="true" forcerange="-25 25"/>
+        <position name="elbow_pitch_l_joint" joint="elbow_pitch_l_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25" forcelimited="true" forcerange="-25 25"/>
+        <position name="elbow_yaw_l_joint" joint="elbow_yaw_l_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25" forcelimited="true" forcerange="-25 25"/>
+        <position name="wrist_pitch_l_joint" joint="wrist_pitch_l_joint" kp="5.0" kv="1.0" ctrllimited="true" ctrlrange="-10 10" forcelimited="true" forcerange="-10 10"/>
+        <position name="wrist_roll_l_joint" joint="wrist_roll_l_joint" kp="5.0" kv="1.0" ctrllimited="true" ctrlrange="-10 10" forcelimited="true" forcerange="-10 10"/>
         <!-- 右臂 -->
-        <position name="shoulder_pitch_r_joint" joint="shoulder_pitch_r_joint" kp="100.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25"/>
-        <position name="shoulder_roll_r_joint" joint="shoulder_roll_r_joint" kp="100.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25"/>
-        <position name="shoulder_yaw_r_joint" joint="shoulder_yaw_r_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25"/>
-        <position name="elbow_pitch_r_joint" joint="elbow_pitch_r_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25"/>
-        <position name="elbow_yaw_r_joint" joint="elbow_yaw_r_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25"/>
-        <position name="wrist_pitch_r_joint" joint="wrist_pitch_r_joint" kp="20.0" kv="1.0" ctrllimited="true" ctrlrange="-10 10"/>
-        <position name="wrist_roll_r_joint" joint="wrist_roll_r_joint" kp="20.0" kv="1.0" ctrllimited="true" ctrlrange="-10 10"/>
+        <position name="shoulder_pitch_r_joint" joint="shoulder_pitch_r_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25" forcelimited="true" forcerange="-25 25"/>
+        <position name="shoulder_roll_r_joint" joint="shoulder_roll_r_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25" forcelimited="true" forcerange="-25 25"/>
+        <position name="shoulder_yaw_r_joint" joint="shoulder_yaw_r_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25" forcelimited="true" forcerange="-25 25"/>
+        <position name="elbow_pitch_r_joint" joint="elbow_pitch_r_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25" forcelimited="true" forcerange="-25 25"/>
+        <position name="elbow_yaw_r_joint" joint="elbow_yaw_r_joint" kp="50.0" kv="2.0" ctrllimited="true" ctrlrange="-25 25" forcelimited="true" forcerange="-25 25"/>
+        <position name="wrist_pitch_r_joint" joint="wrist_pitch_r_joint" kp="5.0" kv="1.0" ctrllimited="true" ctrlrange="-10 10" forcelimited="true" forcerange="-10 10"/>
+        <position name="wrist_roll_r_joint" joint="wrist_roll_r_joint" kp="5.0" kv="1.0" ctrllimited="true" ctrlrange="-10 10" forcelimited="true" forcerange="-10 10"/>
     </actuator>
 
     <sensor>

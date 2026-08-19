@@ -567,8 +567,12 @@ class OnnxPolicy:
 # MuJoCo 仿真主循环
 # ═══════════════════════════════════════════════════════════════
 
-def run_simulation(policy, model_path, total_steps=None, gui=True):
-    """在 MuJoCo 中运行 ONNX 策略"""
+def run_simulation(policy, model_path, total_steps=None, gui=True, ctrl_delay_steps=3):
+    """在 MuJoCo 中运行 ONNX 策略
+
+    ctrl_delay_steps: 指令延迟(策略步数), 模拟训练端 DelayedDCMotor 的 2~5 步随机延迟,
+    使部署端执行时序与训练端一致。0 = 无延迟。
+    """
     import time
     import mujoco
     import mujoco.viewer  # 显式导入 viewer 模块
@@ -595,6 +599,11 @@ def run_simulation(policy, model_path, total_steps=None, gui=True):
     DECIMATION = max(1, round(CONTROL_DT / physics_dt))
     SIM_DT = physics_dt  # 使用 MJCF 的实际 timestep
     print(f"  物理 timestep: {physics_dt}s, 计算 decimation: {DECIMATION}, 控制周期: {CONTROL_DT}s")
+    print(f"  指令延迟: {ctrl_delay_steps} 个策略步 ({ctrl_delay_steps * CONTROL_DT * 1000:.0f}ms)")
+
+    # 指令延迟缓冲: 实际下发给 MuJoCo 的 ctrl 是 N 个策略步之前的目标位置
+    ctrl_delay_buf = deque()
+    applied_target = DEFAULT_JOINT_POS_MOTOR.copy()  # 缓冲未填满前保持站立姿态
 
     # 初始化机器人姿态（使用默认关节位置）
     default_pos_motor = DEFAULT_JOINT_POS_MOTOR
@@ -668,10 +677,17 @@ def run_simulation(policy, model_path, total_steps=None, gui=True):
             )
             target_pos_motor = policy.get_action(inputs)
             actions_log.append(target_pos_motor.copy())
+            # 入延迟缓冲; 缓冲长度超过延迟步数后, 取出最旧的目标下发
+            if ctrl_delay_steps > 0:
+                ctrl_delay_buf.append(target_pos_motor.copy())
+                if len(ctrl_delay_buf) > ctrl_delay_steps:
+                    applied_target = ctrl_delay_buf.popleft()
+            else:
+                applied_target = target_pos_motor
 
         # 2026-08-18 v3: <position> 执行器 — ctrl 直接设为目标位置
         # MuJoCo 内置位置伺服: force = kp*(ctrl-q) - kv*dq
-        mj_data.ctrl[:NUM_JOINTS] = target_pos_motor
+        mj_data.ctrl[:NUM_JOINTS] = applied_target
 
         # 仿真步进
         mujoco.mj_step(mj_model, mj_data)
@@ -758,6 +774,8 @@ def main():
                         help="总仿真步数（默认 10 秒 = 5000 步）")
     parser.add_argument("--action_scale", type=float, default=None,
                         help="覆盖 action_scale（默认从 ONNX metadata 读取）")
+    parser.add_argument("--delay", type=int, default=3,
+                        help="指令延迟(策略步数), 模拟训练端 DelayedDCMotor 2~5 步延迟, 0=关闭 (默认 3)")
     args = parser.parse_args()
 
     # 检查文件
@@ -780,7 +798,8 @@ def main():
     policy = OnnxPolicy(args.onnx, motion_path=args.motion, action_scale_val=args.action_scale)
 
     # 运行仿真
-    result = run_simulation(policy, model_path, total_steps=args.steps, gui=not args.no_gui)
+    result = run_simulation(policy, model_path, total_steps=args.steps,
+                            gui=not args.no_gui, ctrl_delay_steps=max(0, args.delay))
 
     if result is None:
         print("\n✗ 仿真失败")
