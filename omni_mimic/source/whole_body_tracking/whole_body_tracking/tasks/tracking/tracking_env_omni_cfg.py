@@ -388,6 +388,20 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
+    # -- Batch 1: 关节级跟踪（替代 body 级跟踪）--
+    # body_names 不传(默认 None) → find_joints(None) 返回全 29 关节
+    track_joint_pos = RewTerm(
+        func=mdp.joint_pos_exp,
+        weight=2.0,
+        params={"command_name": "motion", "std": 0.5},
+    )
+    track_joint_vel = RewTerm(
+        func=mdp.joint_vel_exp,
+        weight=1.0,
+        params={"command_name": "motion", "std": 3.0},
+    )
+    termination_penalty = RewTerm(func=mdp.is_terminated, weight=-200.0)
+    # -- 保留: 基座级跟踪（与关节级不冲突，不同层面）--
     motion_global_anchor_pos = RewTerm(
         func=mdp.motion_global_anchor_position_error_exp,
         weight=0.5,
@@ -398,16 +412,17 @@ class RewardsCfg:
         weight=0.5,
         params={"command_name": "motion", "std": 0.4},
     )
-    motion_body_pos = RewTerm(
-        func=mdp.motion_relative_body_position_error_exp,
-        weight=1.0,
-        params={"command_name": "motion", "std": 0.3},
-    )
-    motion_body_ori = RewTerm(
-        func=mdp.motion_relative_body_orientation_error_exp,
-        weight=1.0,
-        params={"command_name": "motion", "std": 0.4},
-    )
+    # -- Batch 1 移除: body 级跟踪被 joint 级替代 --
+    # motion_body_pos = RewTerm(
+    #     func=mdp.motion_relative_body_position_error_exp,
+    #     weight=1.0,
+    #     params={"command_name": "motion", "std": 0.3},
+    # )
+    # motion_body_ori = RewTerm(
+    #     func=mdp.motion_relative_body_orientation_error_exp,
+    #     weight=1.0,
+    #     params={"command_name": "motion", "std": 0.4},
+    # )
     motion_body_lin_vel = RewTerm(
         func=mdp.motion_global_body_linear_velocity_error_exp,
         weight=0.5, # 1.0
@@ -510,19 +525,20 @@ class TerminationsCfg:
         func=mdp.bad_anchor_ori,
         params={"asset_cfg": SceneEntityCfg("robot"), "command_name": "motion", "threshold": 0.9},
     )
-    ee_body_pos = DoneTerm(
-        func=mdp.bad_motion_body_pos_z_only,
-        params={
-            "command_name": "motion",
-            "threshold": 0.3,
-            "body_names": [
-                "ankle_roll_l_link",
-                "ankle_roll_r_link",
-                "wrist_roll_l_link",
-                "wrist_roll_r_link",
-            ],
-        },
-    )
+    # -- Batch 1 移除: 手腕位移大导致 75% 回合被杀，阻碍手臂摆动学习 --
+    # ee_body_pos = DoneTerm(
+    #     func=mdp.bad_motion_body_pos_z_only,
+    #     params={
+    #         "command_name": "motion",
+    #         "threshold": 0.3,
+    #         "body_names": [
+    #             "ankle_roll_l_link",
+    #             "ankle_roll_r_link",
+    #             "wrist_roll_l_link",
+    #             "wrist_roll_r_link",
+    #         ],
+    #     },
+    # )
     # illegal_contact = DoneTerm(
     #     func=mdp.illegal_contact,
     #     params={
