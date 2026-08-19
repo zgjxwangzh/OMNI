@@ -390,10 +390,12 @@ class RewardsCfg:
 
     # -- Batch 1: 关节级跟踪（替代 body 级跟踪）--
     # body_names 不传(默认 None) → find_joints(None) 返回全 29 关节
+    # Batch 1 修复: std 从 0.5 提高到 1.0，让奖励信号更容易获得
+    # 原 std=0.5 太严格，resume 后策略误差大(6.22)，reward=exp(-6.22/0.25)≈0，无梯度信号
     track_joint_pos = RewTerm(
         func=mdp.joint_pos_exp,
         weight=2.0,
-        params={"command_name": "motion", "std": 0.5},
+        params={"command_name": "motion", "std": 1.0},
     )
     track_joint_vel = RewTerm(
         func=mdp.joint_vel_exp,
