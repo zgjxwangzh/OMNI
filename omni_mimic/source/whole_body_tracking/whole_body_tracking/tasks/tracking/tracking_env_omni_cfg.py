@@ -401,7 +401,7 @@ class RewardsCfg:
     )
     joint_pos_penalty = RewTerm(
         func=mdp.joint_pos_l2_penalty,
-        weight=-10.0,
+        weight=10.0,
         params={"command_name": "motion"},
     )
     track_joint_vel = RewTerm(
