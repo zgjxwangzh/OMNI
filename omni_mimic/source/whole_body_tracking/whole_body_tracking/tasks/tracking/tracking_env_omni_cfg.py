@@ -211,7 +211,8 @@ class ObservationsCfg:
         motion_anchor_ori_b = ObsTerm(
             func=mdp.motion_anchor_ori_b, params={"command_name": "motion"}, noise=Unoise(n_min=-0.05, n_max=0.05)
         )
-        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.5, n_max=0.5))
+        # base_lin_vel 保持注释 - 原始设计，sim-to-real 考虑（真实机器人无法直接测量基座线速度）
+        # base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.5, n_max=0.5))
         projected_gravity = ObsTerm(func=mdp.projected_gravity, noise=Unoise(n_min=-0.05, n_max=0.05))
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
@@ -256,7 +257,8 @@ class ObservationsHistCfg:
         motion_anchor_ori_b = ObsTerm(
             func=mdp.motion_anchor_ori_b, params={"command_name": "motion"}, noise=Unoise(n_min=-0.05, n_max=0.05)
         )
-        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.5, n_max=0.5))
+        # base_lin_vel 保持注释 - 原始设计，sim-to-real 考虑
+        # base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.5, n_max=0.5))
         projected_gravity = ObsTerm(func=mdp.projected_gravity, history_length=5, noise=Unoise(n_min=-0.05, n_max=0.05))
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel,history_length=5,noise=Unoise(n_min=-0.2, n_max=0.2))
         joint_pos = ObsTerm(func=mdp.joint_pos_rel,history_length=5,noise=Unoise(n_min=-0.01, n_max=0.01))
@@ -388,9 +390,13 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP.
 
-    基于原始配置 (bak_original) + motion_anchor_pos_b 观察
+    基于原始配置 (bak_original) + 两个关键修改：
+    1. motion_anchor_pos_b 观察（协调性提升）
+    2. joint_pos_penalty w=5（弱约束，防止退化安全网）
+    
     原始配置达到 error=1.38，但退化到 2.38
-    加入 motion_anchor_pos_b 希望维持低 error
+    退化原因：纯 body 级奖励允许策略在部分关节偷懒
+    joint_pos_penalty 提供持续的关节级压力，防止偷懒
     """
 
     # -- 基座级跟踪（原始配置）--
@@ -423,6 +429,15 @@ class RewardsCfg:
         func=mdp.motion_global_body_angular_velocity_error_exp,
         weight=0.5,
         params={"command_name": "motion", "std": 3.14},
+    )
+
+    # -- 关节级约束：防止退化安全网 --
+    # w=5: 在 error=1.38 时 penalty=-9.5 (占 body 奖励 ~30%)
+    # 足够阻止关节偷懒，不会与 body 级奖励冲突
+    joint_pos_penalty = RewTerm(
+        func=mdp.joint_pos_l2_penalty,
+        weight=5.0,
+        params={"command_name": "motion"},
     )
 
     # -- 常规约束 --
