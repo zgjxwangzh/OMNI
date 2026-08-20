@@ -388,32 +388,12 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP.
 
-    回退到稳定配置（ec9f2a5: 达到 1.35）+ motion_anchor_pos_b 观察
+    基于原始配置 (bak_original) + motion_anchor_pos_b 观察
+    原始配置达到 error=1.38，但退化到 2.38
+    加入 motion_anchor_pos_b 希望维持低 error
     """
 
-    # -- 核心：关节跟踪 --
-    track_joint_pos = RewTerm(
-        func=mdp.joint_pos_exp,
-        weight=8.0,
-        params={"command_name": "motion", "std": 0.5},  # 0.5 比 0.3 更不易饱和
-    )
-    track_joint_vel = RewTerm(
-        func=mdp.joint_vel_exp,
-        weight=2.0,
-        params={"command_name": "motion", "std": 2.0},
-    )
-
-    # -- 线性惩罚 --
-    joint_pos_penalty = RewTerm(
-        func=mdp.joint_pos_l2_penalty,
-        weight=30.0,  # 回退到稳定值
-        params={"command_name": "motion"},
-    )
-
-    # -- 摔倒惩罚 --
-    termination_penalty = RewTerm(func=mdp.is_terminated, weight=-1000.0)
-
-    # -- 基座级跟踪 --
+    # -- 基座级跟踪（原始配置）--
     motion_global_anchor_pos = RewTerm(
         func=mdp.motion_global_anchor_position_error_exp,
         weight=0.5,
@@ -422,6 +402,16 @@ class RewardsCfg:
     motion_global_anchor_ori = RewTerm(
         func=mdp.motion_global_anchor_orientation_error_exp,
         weight=0.5,
+        params={"command_name": "motion", "std": 0.4},
+    )
+    motion_body_pos = RewTerm(
+        func=mdp.motion_relative_body_position_error_exp,
+        weight=1.0,
+        params={"command_name": "motion", "std": 0.3},
+    )
+    motion_body_ori = RewTerm(
+        func=mdp.motion_relative_body_orientation_error_exp,
+        weight=1.0,
         params={"command_name": "motion", "std": 0.4},
     )
     motion_body_lin_vel = RewTerm(
@@ -436,7 +426,7 @@ class RewardsCfg:
     )
 
     # -- 常规约束 --
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.2)  # -0.1→-0.2
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.1)
     joint_limit = RewTerm(
         func=mdp.joint_pos_limits,
         weight=-10.0,
