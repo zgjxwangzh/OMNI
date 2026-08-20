@@ -388,20 +388,14 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    # -- Batch 4: 指数+线性双管齐下 --
-    # 2026-08-20: 纯指数奖励 exp(-MSE/std²) 天生有上限 1.0
-    # std=1.0 时 MSE=0.109→exp=0.90, 策略"满足"不改善
-    # std=0.5 时 MSE=0.109→exp=0.65, 有压力但仍不够
-    # 新增 joint_pos_l2_penalty(-MSE) 线性惩罚: 误差不饱和, 持续施压
-    # 配合 exp std=0.5: 指数提供"好坏区分", 线性提供"持续压力"
-    track_joint_pos = RewTerm(
-        func=mdp.joint_pos_exp,
-        weight=8.0,
-        params={"command_name": "motion", "std": 0.5},
-    )
+    # -- Batch 5: 去掉指数奖励，只用线性惩罚 --
+    # 2026-08-20: 指数 exp(-MSE/std²) 有天花板，策略在某个误差水平"满足"
+    # 然后转去优化其他奖励（速度、接触），位置精度被牺牲 → error 回升
+    # 线性惩罚 -MSE 永不饱和，误差越大惩罚越大，策略必须持续改善
+    # track_joint_pos 指数奖励移除，只保留 joint_pos_penalty 线性惩罚
     joint_pos_penalty = RewTerm(
         func=mdp.joint_pos_l2_penalty,
-        weight=30.0,  # 20 不够稳（曾到 1.35 但退化），30 应该能稳住
+        weight=30.0,
         params={"command_name": "motion"},
     )
     track_joint_vel = RewTerm(
