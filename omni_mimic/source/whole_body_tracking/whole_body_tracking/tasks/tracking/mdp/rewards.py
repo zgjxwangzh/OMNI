@@ -148,9 +148,11 @@ def joint_pos_exp(env: MyBaseRLEnv, command_name: str, std: float, body_names: l
         joint_ids = slice(None)  # all joints
     else:
         joint_ids = command.robot.find_joints(body_names)[0]
-    # 2026-08-20 保守方案：保持 sum，通过 std=5.0 提供梯度
-    # 原 std=20.0 时 exp(-error/400)≈0.99 太平；std=5.0 时 exp(-error/25)≈0.89 有梯度
-    error = torch.sum(torch.square(command.joint_pos[:, joint_ids] - command.robot_joint_pos[:, joint_ids]), dim=-1)
+    # 2026-08-20 最终修复: sum→mean, 解决 29 关节求和导致奖励曲面平坦的根本问题
+    # 参考: liuzq_jump_train_v11 跳高训练 mean+std=0.5 成功收敛(75cm)
+    # sum: error≈29*MSE, std=5 时 exp(-3/25)≈0.89 梯度仍弱
+    # mean: error≈MSE, std=1.0 时 exp(-0.3/1)≈0.74 梯度强
+    error = torch.mean(torch.square(command.joint_pos[:, joint_ids] - command.robot_joint_pos[:, joint_ids]), dim=-1)
     return 1.0 * penalty + (-1)**(penalty) * torch.exp(-error / std**2)
 
 # 线性惩罚：不饱和，误差越大惩罚越大，梯度始终存在
@@ -169,8 +171,8 @@ def joint_vel_exp(env: MyBaseRLEnv, command_name: str, std: float, body_names: l
         joint_ids = slice(None)  # all joints
     else:
         joint_ids = command.robot.find_joints(body_names)[0]
-    # 2026-08-20 保守方案：保持 sum，与 joint_pos_exp 一致
-    error = torch.sum(torch.square(command.joint_vel[:, joint_ids] - command.robot_joint_vel[:, joint_ids]), dim=-1)
+    # 2026-08-20 最终修复: sum→mean, 与 joint_pos_exp 保持一致
+    error = torch.mean(torch.square(command.joint_vel[:, joint_ids] - command.robot_joint_vel[:, joint_ids]), dim=-1)
     return 1.0 * penalty + (-1)**(penalty) * torch.exp(-error / std**2)
 
 ########################################### feet symmetry (for two feet symmetry motions) ###########################################

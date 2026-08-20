@@ -30,10 +30,9 @@ class OmniFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
         entropy_coef=0.005,
         num_learning_epochs=5,
         num_mini_batches=4,
-        # 2026-08-20: 奖励函数修复后提高学习率加速收敛
-        # 原 1e-4 偏低，跳高用 1e-3 成功收敛
-        # 取中间值 5e-4，平衡稳定性和收敛速度
-        learning_rate=5.0e-4,
+        # 2026-08-20 最终: lr 对齐跳高训练(1e-3), 加速跳出局部最优
+        # 跳高 lr=1e-3 成功收敛 75cm, 跑步用同样值
+        learning_rate=1.0e-3,
         schedule="fixed",
         gamma=0.99,
         lam=0.95,
