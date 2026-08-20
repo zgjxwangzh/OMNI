@@ -388,24 +388,14 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    # -- Batch 7: 恢复 body 级跟踪 + joint 级跟踪结合 --
-    # 根因：Batch 1 移除 motion_body_pos/ori 和 ee_body_pos 终止
-    #   → 策略失去身体整体姿态稳定性引导
-    #   → 策略通过极端姿势（摔倒）降低 joint_pos 误差
-    #   → 在 1.68 陷入局部最优
-    #
-    # 方案：恢复原始 body 级跟踪 + 保留 joint 级跟踪
-    #   Body 级：提供整体姿态稳定性（原始 w=1.0）
-    #   Joint 级：提供关节精度（exp+linear 组合）
+    # -- 阶段 1: 稳定跑步 + 适度跟踪 --
+    # 目标：策略学会稳定跑步，不摔倒
+    # std=1.0 宽松跟踪，让策略先学会跑步
+    # 不添加 linear penalty，避免策略"恐慌"
     track_joint_pos = RewTerm(
         func=mdp.joint_pos_exp,
-        weight=8.0,
-        params={"command_name": "motion", "std": 0.5},
-    )
-    joint_pos_penalty = RewTerm(
-        func=mdp.joint_pos_l2_penalty,
-        weight=15.0,  # <27 不躺平
-        params={"command_name": "motion"},
+        weight=4.0,
+        params={"command_name": "motion", "std": 1.0},
     )
     track_joint_vel = RewTerm(
         func=mdp.joint_vel_exp,
@@ -416,12 +406,12 @@ class RewardsCfg:
     # -- 恢复：body 级跟踪（提供整体姿态稳定性）--
     motion_body_pos = RewTerm(
         func=mdp.motion_relative_body_position_error_exp,
-        weight=1.0,  # 恢复原始值
+        weight=1.0,
         params={"command_name": "motion", "std": 0.3},
     )
     motion_body_ori = RewTerm(
         func=mdp.motion_relative_body_orientation_error_exp,
-        weight=1.0,  # 恢复原始值
+        weight=1.0,
         params={"command_name": "motion", "std": 0.4},
     )
     # -- 保留：基座级跟踪 --
@@ -445,15 +435,15 @@ class RewardsCfg:
         weight=0.5,
         params={"command_name": "motion", "std": 3.14},
     )
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.1)  # 恢复原始值
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.1)
     joint_limit = RewTerm(
         func=mdp.joint_pos_limits,
-        weight=-10.0,  # 恢复原始值
+        weight=-10.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*"])},
     )
     undesired_contacts = RewTerm(
         func=mdp.undesired_contacts,
-        weight=-0.1,  # 恢复原始值
+        weight=-0.1,
         params={
             "sensor_cfg": SceneEntityCfg(
                 "contact_forces",
