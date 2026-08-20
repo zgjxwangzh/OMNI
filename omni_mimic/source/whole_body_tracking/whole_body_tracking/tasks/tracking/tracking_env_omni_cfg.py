@@ -458,19 +458,38 @@ class RewardsCfg:
             "threshold": 1.0,
         },
     )
-    # joint_pos_tracking_legs = RewTerm(
-    #     func=mdp.joint_pos_exp,
-    #     weight=0.3,
-    #     params={
-    #         "command_name": "motion",
-    #         "std": 0.5,
-    #         "body_names": [
-    #             "hip_pitch_l_joint", "hip_pitch_r_joint",
-    #             "knee_pitch_l_joint", "knee_pitch_r_joint",
-    #             "ankle_pitch_l_joint", "ankle_pitch_r_joint",
-    #         ],
-    #     },
-    # )
+    # -- 针对性：手臂关节跟踪（解决左臂下垂）--
+    track_arm_joints = RewTerm(
+        func=mdp.joint_pos_exp,
+        weight=5.0,
+        params={
+            "command_name": "motion",
+            "std": 0.3,
+            "body_names": [
+                "shoulder_pitch_l_joint", "shoulder_roll_l_joint", "shoulder_yaw_l_joint",
+                "elbow_pitch_l_joint", "elbow_yaw_l_joint",
+                "wrist_pitch_l_joint", "wrist_roll_l_joint",
+                "shoulder_pitch_r_joint", "shoulder_roll_r_joint", "shoulder_yaw_r_joint",
+                "elbow_pitch_r_joint", "elbow_yaw_r_joint",
+                "wrist_pitch_r_joint", "wrist_roll_r_joint",
+            ],
+        },
+    )
+    # -- 针对性：腿部关节跟踪（解决跛脚）--
+    track_leg_joints = RewTerm(
+        func=mdp.joint_pos_exp,
+        weight=5.0,
+        params={
+            "command_name": "motion",
+            "std": 0.3,
+            "body_names": [
+                "hip_pitch_l_joint", "hip_roll_l_joint", "hip_yaw_l_joint",
+                "knee_pitch_l_joint", "ankle_pitch_l_joint", "ankle_roll_l_joint",
+                "hip_pitch_r_joint", "hip_roll_r_joint", "hip_yaw_r_joint",
+                "knee_pitch_r_joint", "ankle_pitch_r_joint", "ankle_roll_r_joint",
+            ],
+        },
+    )
     # feet_force_sym = RewTerm(
     #     func=mdp.feet_force_symmetry,
     #     weight=-0.005,
