@@ -14,13 +14,10 @@ class OmniFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     empirical_normalization = True
     runner_class_name = "MotionOnPolicyRunner" # OnPolicyRunner | MotionOnPolicyRunner
     policy = RslRlPpoActorCriticCfg(
-        init_noise_std=1.2,  # 1.0→1.2 加强探索，防止策略过早固化到局部最优
+        init_noise_std=1.0,  # 回退到稳定值
         noise_std_type="scalar",
-        # 网络大小：从 [3072,1536,768,512] 缩小到 [1024,512,256]
-        # 原因：大网络过拟合 Isaac Lab 物理 → sim2sim 失败（跳高验证）
-        # [1024,512,256] 足够表达跑步动作，同时保持泛化能力
-        actor_hidden_dims=[1024, 512, 256],
-        critic_hidden_dims=[1024, 512, 256],
+        actor_hidden_dims=[3072, 1536, 768, 512],  # 回退到稳定网络
+        critic_hidden_dims=[3072, 1536, 768, 512],
         activation="elu",
     )
     algorithm = RslRlPpoAlgorithmCfg(

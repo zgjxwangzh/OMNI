@@ -388,20 +388,14 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP.
 
-    从头训练配置 - 基于运动学 + sim2sim 鲁棒性设计
-    
-    核心原则：
-    1. 简洁奖励，避免冲突梯度
-    2. 适中 penalty，防止躺平
-    3. 对称约束，解决左右不对称
-    4. 动作平滑，防止抽搐
+    回退到稳定配置（ec9f2a5: 达到 1.35）+ motion_anchor_pos_b 观察
     """
 
-    # -- 核心：关节跟踪（所有 29 个关节）--
+    # -- 核心：关节跟踪 --
     track_joint_pos = RewTerm(
         func=mdp.joint_pos_exp,
         weight=8.0,
-        params={"command_name": "motion", "std": 0.3},
+        params={"command_name": "motion", "std": 0.5},  # 0.5 比 0.3 更不易饱和
     )
     track_joint_vel = RewTerm(
         func=mdp.joint_vel_exp,
@@ -409,19 +403,17 @@ class RewardsCfg:
         params={"command_name": "motion", "std": 2.0},
     )
 
-    # -- 线性惩罚：防止策略满足 --
-    # 30→15：在 error=1.7 时 penalty=-25.5，与 reward=+3.5 平衡
-    # 避免策略"躺平"减少动作幅度
+    # -- 线性惩罚 --
     joint_pos_penalty = RewTerm(
         func=mdp.joint_pos_l2_penalty,
-        weight=15.0,
+        weight=30.0,  # 回退到稳定值
         params={"command_name": "motion"},
     )
 
     # -- 摔倒惩罚 --
     termination_penalty = RewTerm(func=mdp.is_terminated, weight=-1000.0)
 
-    # -- 基座级跟踪：整体运动协调 --
+    # -- 基座级跟踪 --
     motion_global_anchor_pos = RewTerm(
         func=mdp.motion_global_anchor_position_error_exp,
         weight=0.5,
@@ -444,7 +436,7 @@ class RewardsCfg:
     )
 
     # -- 常规约束 --
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.1)
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.2)  # -0.1→-0.2
     joint_limit = RewTerm(
         func=mdp.joint_pos_limits,
         weight=-10.0,
