@@ -205,14 +205,16 @@ class ObservationsCfg:
 
         # observation terms (order preserved)
         command = ObsTerm(func=mdp.generated_commands, params={"command_name": "motion"})
-        motion_anchor_pos_b = ObsTerm(
-            func=mdp.motion_anchor_pos_b, params={"command_name": "motion"}, noise=Unoise(n_min=-0.25, n_max=0.25)
-        )
+        # motion_anchor_pos_b 保持注释 - 原始设计（真实机器人无 GPS，无法测绝对位置）
+        # motion_anchor_pos_b = ObsTerm(
+        #     func=mdp.motion_anchor_pos_b, params={"command_name": "motion"}, noise=Unoise(n_min=-0.25, n_max=0.25)
+        # )
         motion_anchor_ori_b = ObsTerm(
             func=mdp.motion_anchor_ori_b, params={"command_name": "motion"}, noise=Unoise(n_min=-0.05, n_max=0.05)
         )
-        # base_lin_vel 保持注释 - 原始设计，sim-to-real 考虑（真实机器人无法直接测量基座线速度）
-        # base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.5, n_max=0.5))
+        # base_lin_vel 启用 - 速度反馈（IMU+腿里程计可估计，sim-to-real 友好）
+        # 数据支撑：error_anchor_lin_vel=0.6 从不改善，速度是瓶颈
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.5, n_max=0.5))
         projected_gravity = ObsTerm(func=mdp.projected_gravity, noise=Unoise(n_min=-0.05, n_max=0.05))
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
@@ -251,14 +253,15 @@ class ObservationsHistCfg:
 
         # observation terms (order preserved)
         command = ObsTerm(func=mdp.generated_commands, params={"command_name": "motion"})
-        motion_anchor_pos_b = ObsTerm(
-            func=mdp.motion_anchor_pos_b, params={"command_name": "motion"}, noise=Unoise(n_min=-0.25, n_max=0.25)
-        )
+        # motion_anchor_pos_b 保持注释 - 原始设计
+        # motion_anchor_pos_b = ObsTerm(
+        #     func=mdp.motion_anchor_pos_b, params={"command_name": "motion"}, noise=Unoise(n_min=-0.25, n_max=0.25)
+        # )
         motion_anchor_ori_b = ObsTerm(
             func=mdp.motion_anchor_ori_b, params={"command_name": "motion"}, noise=Unoise(n_min=-0.05, n_max=0.05)
         )
-        # base_lin_vel 保持注释 - 原始设计，sim-to-real 考虑
-        # base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.5, n_max=0.5))
+        # base_lin_vel 启用 - 速度反馈
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.5, n_max=0.5))
         projected_gravity = ObsTerm(func=mdp.projected_gravity, history_length=5, noise=Unoise(n_min=-0.05, n_max=0.05))
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel,history_length=5,noise=Unoise(n_min=-0.2, n_max=0.2))
         joint_pos = ObsTerm(func=mdp.joint_pos_rel,history_length=5,noise=Unoise(n_min=-0.01, n_max=0.01))
@@ -390,13 +393,13 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP.
 
-    基于原始配置 (bak_original) + 两个关键修改：
-    1. motion_anchor_pos_b 观察（协调性提升）
-    2. joint_pos_penalty w=5（弱约束，防止退化安全网）
+    基于原始配置 (bak_original) + 速度反馈修改
+    数据支撑：error_anchor_lin_vel=0.6 从不改善 → 速度是瓶颈
     
-    原始配置达到 error=1.38，但退化到 2.38
-    退化原因：纯 body 级奖励允许策略在部分关节偷懒
-    joint_pos_penalty 提供持续的关节级压力，防止偷懒
+    修改：
+    1. base_lin_vel 观察（速度反馈）
+    2. motion_body_lin_vel 加强 (w 0.5→1.0, std 1.0→0.5)
+    其余完全保持原始配置
     """
 
     # -- 基座级跟踪（原始配置）--
@@ -420,24 +423,18 @@ class RewardsCfg:
         weight=1.0,
         params={"command_name": "motion", "std": 0.4},
     )
+    # -- 速度跟踪加强 --
+    # 数据支撑：error_anchor_lin_vel=0.6 从不改善，机器人跟不上参考速度
+    # w 0.5→1.0, std 1.0→0.5：给速度跟踪更强压力
     motion_body_lin_vel = RewTerm(
         func=mdp.motion_global_body_linear_velocity_error_exp,
-        weight=0.5,
-        params={"command_name": "motion", "std": 1.0},
+        weight=1.0,
+        params={"command_name": "motion", "std": 0.5},
     )
     motion_body_ang_vel = RewTerm(
         func=mdp.motion_global_body_angular_velocity_error_exp,
         weight=0.5,
         params={"command_name": "motion", "std": 3.14},
-    )
-
-    # -- 关节级约束：防止退化安全网 --
-    # w=5: 在 error=1.38 时 penalty=-9.5 (占 body 奖励 ~30%)
-    # 足够阻止关节偷懒，不会与 body 级奖励冲突
-    joint_pos_penalty = RewTerm(
-        func=mdp.joint_pos_l2_penalty,
-        weight=5.0,
-        params={"command_name": "motion"},
     )
 
     # -- 常规约束 --
@@ -499,9 +496,20 @@ class TerminationsCfg:
         func=mdp.bad_anchor_ori,
         params={"asset_cfg": SceneEntityCfg("robot"), "command_name": "motion", "threshold": 0.9},
     )
-    # -- Batch 1 移除: 手腕位移大导致 75% 回合被杀，阻碍手臂摆动学习 --
-    # -- ee_body_pos 保持移除：手腕位移大导致 75% 回合被杀，阻碍手臂摆动学习 --
-    # 有 joint 级跟踪 + body 级跟踪 + termination_penalty=-1000 已足够防止摔倒
+    # -- 恢复 ee_body_pos（原始配置有，防止脚/手学坏）--
+    ee_body_pos = DoneTerm(
+        func=mdp.bad_motion_body_pos_z_only,
+        params={
+            "command_name": "motion",
+            "threshold": 0.3,
+            "body_names": [
+                "ankle_roll_l_link",
+                "ankle_roll_r_link",
+                "wrist_roll_l_link",
+                "wrist_roll_r_link",
+            ],
+        },
+    )
     # illegal_contact = DoneTerm(
     #     func=mdp.illegal_contact,
     #     params={
