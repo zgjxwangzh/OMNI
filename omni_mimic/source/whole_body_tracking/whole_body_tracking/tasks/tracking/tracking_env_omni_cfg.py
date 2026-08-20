@@ -211,7 +211,7 @@ class ObservationsCfg:
         motion_anchor_ori_b = ObsTerm(
             func=mdp.motion_anchor_ori_b, params={"command_name": "motion"}, noise=Unoise(n_min=-0.05, n_max=0.05)
         )
-        # base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.5, n_max=0.5))
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.5, n_max=0.5))
         projected_gravity = ObsTerm(func=mdp.projected_gravity, noise=Unoise(n_min=-0.05, n_max=0.05))
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel, noise=Unoise(n_min=-0.2, n_max=0.2))
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, noise=Unoise(n_min=-0.01, n_max=0.01))
@@ -256,7 +256,7 @@ class ObservationsHistCfg:
         motion_anchor_ori_b = ObsTerm(
             func=mdp.motion_anchor_ori_b, params={"command_name": "motion"}, noise=Unoise(n_min=-0.05, n_max=0.05)
         )
-        # base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.5, n_max=0.5))
+        base_lin_vel = ObsTerm(func=mdp.base_lin_vel, noise=Unoise(n_min=-0.5, n_max=0.5))
         projected_gravity = ObsTerm(func=mdp.projected_gravity, history_length=5, noise=Unoise(n_min=-0.05, n_max=0.05))
         base_ang_vel = ObsTerm(func=mdp.base_ang_vel,history_length=5,noise=Unoise(n_min=-0.2, n_max=0.2))
         joint_pos = ObsTerm(func=mdp.joint_pos_rel,history_length=5,noise=Unoise(n_min=-0.01, n_max=0.01))
@@ -386,41 +386,42 @@ class EventCfg:
 
 @configclass
 class RewardsCfg:
-    """Reward terms for the MDP."""
+    """Reward terms for the MDP.
 
-    # -- 阶段 2: 精确跟踪（从 batch13 step 19400 resume）--
-    # 根因：body 级奖励太强 → 策略满足於"大致稳定" → 跛脚/挪着走/手臂下垂
-    # 方案：削弱 body 级 + 加强 joint 级 + linear penalty
+    从头训练配置 - 基于运动学 + sim2sim 鲁棒性设计
+    
+    核心原则：
+    1. 简洁奖励，避免冲突梯度
+    2. 适中 penalty，防止躺平
+    3. 对称约束，解决左右不对称
+    4. 动作平滑，防止抽搐
+    """
+
+    # -- 核心：关节跟踪（所有 29 个关节）--
     track_joint_pos = RewTerm(
         func=mdp.joint_pos_exp,
         weight=8.0,
-        params={"command_name": "motion", "std": 0.3},  # 0.5→0.3 更陡梯度
-    )
-    joint_pos_penalty = RewTerm(
-        func=mdp.joint_pos_l2_penalty,
-        weight=30.0,  # 15→30 加倍压力
-        params={"command_name": "motion"},
+        params={"command_name": "motion", "std": 0.3},
     )
     track_joint_vel = RewTerm(
         func=mdp.joint_vel_exp,
         weight=2.0,
         params={"command_name": "motion", "std": 2.0},
     )
+
+    # -- 线性惩罚：防止策略满足 --
+    # 30→15：在 error=1.7 时 penalty=-25.5，与 reward=+3.5 平衡
+    # 避免策略"躺平"减少动作幅度
+    joint_pos_penalty = RewTerm(
+        func=mdp.joint_pos_l2_penalty,
+        weight=15.0,
+        params={"command_name": "motion"},
+    )
+
+    # -- 摔倒惩罚 --
     termination_penalty = RewTerm(func=mdp.is_terminated, weight=-1000.0)
-    # -- 方案 B：条件 body 级奖励（只有 joint error < 阈值时才给）--
-    # 核心逻辑：策略必须"先学会跟踪，再享受稳定性奖励"
-    # 消除局部最优：策略无法在 joint error 大的情况下靠 body 奖励存活
-    motion_body_pos = RewTerm(
-        func=mdp.motion_conditional_body_position_error_exp,
-        weight=0.5,
-        params={"command_name": "motion", "std": 0.3, "joint_threshold": 1.5},
-    )
-    motion_body_ori = RewTerm(
-        func=mdp.motion_conditional_body_orientation_error_exp,
-        weight=0.5,
-        params={"command_name": "motion", "std": 0.4, "joint_threshold": 1.5},
-    )
-    # -- 保留：基座级跟踪 --
+
+    # -- 基座级跟踪：整体运动协调 --
     motion_global_anchor_pos = RewTerm(
         func=mdp.motion_global_anchor_position_error_exp,
         weight=0.5,
@@ -441,6 +442,8 @@ class RewardsCfg:
         weight=0.5,
         params={"command_name": "motion", "std": 3.14},
     )
+
+    # -- 常规约束 --
     action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.1)
     joint_limit = RewTerm(
         func=mdp.joint_pos_limits,
@@ -458,38 +461,6 @@ class RewardsCfg:
                     ],
             ),
             "threshold": 1.0,
-        },
-    )
-    # -- 针对性：手臂关节跟踪（解决左臂下垂）--
-    track_arm_joints = RewTerm(
-        func=mdp.joint_pos_exp,
-        weight=5.0,
-        params={
-            "command_name": "motion",
-            "std": 0.3,
-            "body_names": [
-                "shoulder_pitch_l_joint", "shoulder_roll_l_joint", "shoulder_yaw_l_joint",
-                "elbow_pitch_l_joint", "elbow_yaw_l_joint",
-                "wrist_pitch_l_joint", "wrist_roll_l_joint",
-                "shoulder_pitch_r_joint", "shoulder_roll_r_joint", "shoulder_yaw_r_joint",
-                "elbow_pitch_r_joint", "elbow_yaw_r_joint",
-                "wrist_pitch_r_joint", "wrist_roll_r_joint",
-            ],
-        },
-    )
-    # -- 针对性：腿部关节跟踪（解决跛脚）--
-    track_leg_joints = RewTerm(
-        func=mdp.joint_pos_exp,
-        weight=5.0,
-        params={
-            "command_name": "motion",
-            "std": 0.3,
-            "body_names": [
-                "hip_pitch_l_joint", "hip_roll_l_joint", "hip_yaw_l_joint",
-                "knee_pitch_l_joint", "ankle_pitch_l_joint", "ankle_roll_l_joint",
-                "hip_pitch_r_joint", "hip_roll_r_joint", "hip_yaw_r_joint",
-                "knee_pitch_r_joint", "ankle_pitch_r_joint", "ankle_roll_r_joint",
-            ],
         },
     )
     # feet_force_sym = RewTerm(
