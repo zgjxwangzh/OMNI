@@ -395,7 +395,7 @@ class RewardsCfg:
     # track_joint_pos 指数奖励移除，只保留 joint_pos_penalty 线性惩罚
     joint_pos_penalty = RewTerm(
         func=mdp.joint_pos_l2_penalty,
-        weight=30.0,
+        weight=100.0,  # 30 不够强，策略用其他奖励补偿位置误差
         params={"command_name": "motion"},
     )
     track_joint_vel = RewTerm(
