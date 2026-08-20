@@ -416,7 +416,7 @@ class RewardsCfg:
         weight=2.0,
         params={"command_name": "motion", "std": 2.0},
     )
-    termination_penalty = RewTerm(func=mdp.is_terminated, weight=-200.0)
+    termination_penalty = RewTerm(func=mdp.is_terminated, weight=-1000.0)  # -200→-1000 防止策略通过摔倒作弊
     # -- 保留: 基座级跟踪（与关节级不冲突，不同层面）--
     motion_global_anchor_pos = RewTerm(
         func=mdp.motion_global_anchor_position_error_exp,
