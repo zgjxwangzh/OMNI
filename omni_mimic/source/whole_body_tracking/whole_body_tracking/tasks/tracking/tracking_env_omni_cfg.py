@@ -413,12 +413,12 @@ class RewardsCfg:
     motion_body_pos = RewTerm(
         func=mdp.motion_conditional_body_position_error_exp,
         weight=0.5,
-        params={"command_name": "motion", "std": 0.3, "joint_threshold": 1.2},
+        params={"command_name": "motion", "std": 0.3, "joint_threshold": 1.5},
     )
     motion_body_ori = RewTerm(
         func=mdp.motion_conditional_body_orientation_error_exp,
         weight=0.5,
-        params={"command_name": "motion", "std": 0.4, "joint_threshold": 1.2},
+        params={"command_name": "motion", "std": 0.4, "joint_threshold": 1.5},
     )
     # -- 保留：基座级跟踪 --
     motion_global_anchor_pos = RewTerm(

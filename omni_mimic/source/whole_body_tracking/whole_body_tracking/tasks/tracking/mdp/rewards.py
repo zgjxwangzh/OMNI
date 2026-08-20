@@ -225,7 +225,7 @@ def motion_conditional_body_position_error_exp(
     env: MyBaseRLEnv,
     command_name: str,
     std: float,
-    joint_threshold: float = 1.0,
+    joint_threshold: float = 1.5,
     body_names: list[str] | None = None,
 ) -> torch.Tensor:
     """条件 body 级位置奖励：只有当 joint error < 阈值时才给奖励。
@@ -233,11 +233,13 @@ def motion_conditional_body_position_error_exp(
     核心逻辑：策略必须"先学会跟踪，再享受稳定性奖励"。
     消除局部最优：策略无法在 joint error 大的情况下靠 body 奖励存活。
 
+    使用与 error_joint_pos 指标相同的 L2 norm 计算，确保门控阈值正确。
+
     Args:
         env: 环境实例
         command_name: 运动命令名称
         std: 指数奖励标准差
-        joint_threshold: joint error 阈值，只有低于此值才给 body 奖励
+        joint_threshold: joint L2 error 阈值（与 error_joint_pos 指标同量纲）
         body_names: 要跟踪的 body 名称列表
 
     Returns:
@@ -245,10 +247,8 @@ def motion_conditional_body_position_error_exp(
     """
     command: MotionCommand = env.command_manager.get_term(command_name)
 
-    # 1. 计算 joint tracking error (mean squared error)
-    joint_error = torch.mean(
-        torch.square(command.joint_pos - command.robot_joint_pos), dim=-1
-    )  # (num_envs,)
+    # 1. 计算 joint tracking error (L2 norm，与 error_joint_pos 指标一致)
+    joint_error = torch.norm(command.joint_pos - command.robot_joint_pos, dim=-1)  # (num_envs,)
 
     # 2. 计算 body position error
     body_indexes = _get_body_indexes(command, body_names)
@@ -260,7 +260,7 @@ def motion_conditional_body_position_error_exp(
 
     # 3. 条件门控：只有 joint error < threshold 时才给 body 奖励
     # 使用软门控（sigmoid）使梯度更平滑
-    gate = torch.sigmoid(-(joint_error - joint_threshold) * 10.0)  # 平滑过渡
+    gate = torch.sigmoid(-(joint_error - joint_threshold) * 5.0)  # 平滑过渡
 
     return body_reward * gate
 
@@ -269,7 +269,7 @@ def motion_conditional_body_orientation_error_exp(
     env: MyBaseRLEnv,
     command_name: str,
     std: float,
-    joint_threshold: float = 1.0,
+    joint_threshold: float = 1.5,
     body_names: list[str] | None = None,
 ) -> torch.Tensor:
     """条件 body 级朝向奖励：只有当 joint error < 阈值时才给奖励。
@@ -278,10 +278,8 @@ def motion_conditional_body_orientation_error_exp(
     """
     command: MotionCommand = env.command_manager.get_term(command_name)
 
-    # 1. 计算 joint tracking error
-    joint_error = torch.mean(
-        torch.square(command.joint_pos - command.robot_joint_pos), dim=-1
-    )
+    # 1. 计算 joint tracking error (L2 norm)
+    joint_error = torch.norm(command.joint_pos - command.robot_joint_pos, dim=-1)
 
     # 2. 计算 body orientation error
     body_indexes = _get_body_indexes(command, body_names)
@@ -292,7 +290,7 @@ def motion_conditional_body_orientation_error_exp(
     body_reward = torch.exp(-body_error.mean(-1) / std**2)
 
     # 3. 条件门控
-    gate = torch.sigmoid(-(joint_error - joint_threshold) * 10.0)
+    gate = torch.sigmoid(-(joint_error - joint_threshold) * 5.0)
 
     return body_reward * gate
 
