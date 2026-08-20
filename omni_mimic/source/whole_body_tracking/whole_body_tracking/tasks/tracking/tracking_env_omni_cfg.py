@@ -442,10 +442,10 @@ class RewardsCfg:
         weight=0.5, # 1.0
         params={"command_name": "motion", "std": 3.14},
     )
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-1e-1)
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.5)  # -0.1 → -0.5 抑制剧烈动作
     joint_limit = RewTerm(
         func=mdp.joint_pos_limits,
-        weight=-3.0,
+        weight=-10.0,  # -3.0 → -10.0 加强关节限位约束
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*"])},
     )
     # joint_torques_l2 = RewTerm(
@@ -471,7 +471,7 @@ class RewardsCfg:
     # )
     undesired_contacts = RewTerm(
         func=mdp.undesired_contacts,
-        weight=-0.1,
+        weight=-0.5,  # -0.1 → -0.5 加强接触约束
         params={
             "sensor_cfg": SceneEntityCfg(
                 "contact_forces",
