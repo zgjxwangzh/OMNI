@@ -388,14 +388,18 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    # -- 阶段 1: 稳定跑步 + 适度跟踪 --
-    # 目标：策略学会稳定跑步，不摔倒
-    # std=1.0 宽松跟踪，让策略先学会跑步
-    # 不添加 linear penalty，避免策略"恐慌"
+    # -- 阶段 2: 精确跟踪（从 batch13 step 19400 resume）--
+    # 根因：body 级奖励太强 → 策略满足於"大致稳定" → 跛脚/挪着走/手臂下垂
+    # 方案：削弱 body 级 + 加强 joint 级 + linear penalty
     track_joint_pos = RewTerm(
         func=mdp.joint_pos_exp,
-        weight=4.0,
-        params={"command_name": "motion", "std": 1.0},
+        weight=8.0,  # 4.0→8.0 加强关节跟踪
+        params={"command_name": "motion", "std": 0.5},  # 1.0→0.5 更严格
+    )
+    joint_pos_penalty = RewTerm(
+        func=mdp.joint_pos_l2_penalty,
+        weight=15.0,  # 添加 linear penalty，防止满足
+        params={"command_name": "motion"},
     )
     track_joint_vel = RewTerm(
         func=mdp.joint_vel_exp,
@@ -403,15 +407,15 @@ class RewardsCfg:
         params={"command_name": "motion", "std": 2.0},
     )
     termination_penalty = RewTerm(func=mdp.is_terminated, weight=-1000.0)
-    # -- 恢复：body 级跟踪（提供整体姿态稳定性）--
+    # -- 削弱：body 级跟踪（避免策略"满足"）--
     motion_body_pos = RewTerm(
         func=mdp.motion_relative_body_position_error_exp,
-        weight=1.0,
+        weight=0.3,  # 1.0→0.3 削弱，只提供基本稳定性
         params={"command_name": "motion", "std": 0.3},
     )
     motion_body_ori = RewTerm(
         func=mdp.motion_relative_body_orientation_error_exp,
-        weight=1.0,
+        weight=0.3,  # 1.0→0.3 削弱
         params={"command_name": "motion", "std": 0.4},
     )
     # -- 保留：基座级跟踪 --
