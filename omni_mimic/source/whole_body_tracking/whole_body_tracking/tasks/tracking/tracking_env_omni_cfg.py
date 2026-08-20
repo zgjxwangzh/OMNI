@@ -388,19 +388,15 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    # -- Batch 6: 指数+线性结合，科学计算权重 --
-    # 根因分析:
-    #   penalty=10/20/30: 策略在 1.68 满足，曾到 1.35 但回升
-    #   penalty=50/100: 策略"躺平"，放弃所有跟踪
+    # -- Batch 7: 恢复 body 级跟踪 + joint 级跟踪结合 --
+    # 根因：Batch 1 移除 motion_body_pos/ori 和 ee_body_pos 终止
+    #   → 策略失去身体整体姿态稳定性引导
+    #   → 策略通过极端姿势（摔倒）降低 joint_pos 误差
+    #   → 在 1.68 陷入局部最优
     #
-    # 科学计算:
-    #   躺平(error=2.0): penalty = -W×0.138, 其他奖励≈0
-    #   努力(error=1.0): penalty = -W×0.034, 其他奖励≈+2.8
-    #   努力>躺平: W < 2.8/0.104 = 27
-    #
-    # 方案: exp(w=8, std=0.5) 提供初始梯度 + linear(w=15) 防止满足
-    #   error=1.78→1.35: exp梯度1.2 + linear梯度0.78 = 2.0/step ✓
-    #   不会躺平: W=15 < 27 ✓
+    # 方案：恢复原始 body 级跟踪 + 保留 joint 级跟踪
+    #   Body 级：提供整体姿态稳定性（原始 w=1.0）
+    #   Joint 级：提供关节精度（exp+linear 组合）
     track_joint_pos = RewTerm(
         func=mdp.joint_pos_exp,
         weight=8.0,
@@ -408,7 +404,7 @@ class RewardsCfg:
     )
     joint_pos_penalty = RewTerm(
         func=mdp.joint_pos_l2_penalty,
-        weight=15.0,
+        weight=15.0,  # <27 不躺平
         params={"command_name": "motion"},
     )
     track_joint_vel = RewTerm(
@@ -416,8 +412,19 @@ class RewardsCfg:
         weight=2.0,
         params={"command_name": "motion", "std": 2.0},
     )
-    termination_penalty = RewTerm(func=mdp.is_terminated, weight=-1000.0)  # -200→-1000 防止策略通过摔倒作弊
-    # -- 保留: 基座级跟踪（与关节级不冲突，不同层面）--
+    termination_penalty = RewTerm(func=mdp.is_terminated, weight=-1000.0)
+    # -- 恢复：body 级跟踪（提供整体姿态稳定性）--
+    motion_body_pos = RewTerm(
+        func=mdp.motion_relative_body_position_error_exp,
+        weight=1.0,  # 恢复原始值
+        params={"command_name": "motion", "std": 0.3},
+    )
+    motion_body_ori = RewTerm(
+        func=mdp.motion_relative_body_orientation_error_exp,
+        weight=1.0,  # 恢复原始值
+        params={"command_name": "motion", "std": 0.4},
+    )
+    # -- 保留：基座级跟踪 --
     motion_global_anchor_pos = RewTerm(
         func=mdp.motion_global_anchor_position_error_exp,
         weight=0.5,
@@ -428,57 +435,25 @@ class RewardsCfg:
         weight=0.5,
         params={"command_name": "motion", "std": 0.4},
     )
-    # -- Batch 1 移除: body 级跟踪被 joint 级替代 --
-    # motion_body_pos = RewTerm(
-    #     func=mdp.motion_relative_body_position_error_exp,
-    #     weight=1.0,
-    #     params={"command_name": "motion", "std": 0.3},
-    # )
-    # motion_body_ori = RewTerm(
-    #     func=mdp.motion_relative_body_orientation_error_exp,
-    #     weight=1.0,
-    #     params={"command_name": "motion", "std": 0.4},
-    # )
     motion_body_lin_vel = RewTerm(
         func=mdp.motion_global_body_linear_velocity_error_exp,
-        weight=0.5, # 1.0
+        weight=0.5,
         params={"command_name": "motion", "std": 1.0},
     )
     motion_body_ang_vel = RewTerm(
         func=mdp.motion_global_body_angular_velocity_error_exp,
-        weight=0.5, # 1.0
+        weight=0.5,
         params={"command_name": "motion", "std": 3.14},
     )
-    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.2)  # -0.1→-0.2 温和抑制
+    action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-0.1)  # 恢复原始值
     joint_limit = RewTerm(
         func=mdp.joint_pos_limits,
-        weight=-5.0,  # -3.0→-5.0 适度加强
+        weight=-10.0,  # 恢复原始值
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*"])},
     )
-    # joint_torques_l2 = RewTerm(
-    #     func=mdp.joint_torques_l2,
-    #     weight=-3e-5,
-    #     params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*"])},
-    # )
-    # contact_forces = RewTerm(
-    #     func=mdp.contact_forces,
-    #     weight=-0.003,
-    #     params={
-    #         "sensor_cfg": SceneEntityCfg(
-    #             "contact_forces",
-    #             body_names=[
-    #                 "ankle_roll_l_link",
-    #                 "ankle_roll_r_link", 
-    #                 "shoe_pitch_l_link",
-    #                 "shoe_pitch_r_link",
-    #             ],
-    #         ),
-    #         "threshold": 500.0,
-    #     },
-    # )
     undesired_contacts = RewTerm(
         func=mdp.undesired_contacts,
-        weight=-0.2,  # -0.1→-0.2 适度加强
+        weight=-0.1,  # 恢复原始值
         params={
             "sensor_cfg": SceneEntityCfg(
                 "contact_forces",
@@ -542,19 +517,8 @@ class TerminationsCfg:
         params={"asset_cfg": SceneEntityCfg("robot"), "command_name": "motion", "threshold": 0.9},
     )
     # -- Batch 1 移除: 手腕位移大导致 75% 回合被杀，阻碍手臂摆动学习 --
-    # ee_body_pos = DoneTerm(
-    #     func=mdp.bad_motion_body_pos_z_only,
-    #     params={
-    #         "command_name": "motion",
-    #         "threshold": 0.3,
-    #         "body_names": [
-    #             "ankle_roll_l_link",
-    #             "ankle_roll_r_link",
-    #             "wrist_roll_l_link",
-    #             "wrist_roll_r_link",
-    #         ],
-    #     },
-    # )
+    # -- ee_body_pos 保持移除：手腕位移大导致 75% 回合被杀，阻碍手臂摆动学习 --
+    # 有 joint 级跟踪 + body 级跟踪 + termination_penalty=-1000 已足够防止摔倒
     # illegal_contact = DoneTerm(
     #     func=mdp.illegal_contact,
     #     params={
