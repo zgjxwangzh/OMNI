@@ -220,3 +220,79 @@ def feet_contact_symmetry(
     # XOR: exactly one foot on ground
     return (left_contact ^ right_contact).float()
 
+
+def motion_conditional_body_position_error_exp(
+    env: MyBaseRLEnv,
+    command_name: str,
+    std: float,
+    joint_threshold: float = 1.0,
+    body_names: list[str] | None = None,
+) -> torch.Tensor:
+    """条件 body 级位置奖励：只有当 joint error < 阈值时才给奖励。
+
+    核心逻辑：策略必须"先学会跟踪，再享受稳定性奖励"。
+    消除局部最优：策略无法在 joint error 大的情况下靠 body 奖励存活。
+
+    Args:
+        env: 环境实例
+        command_name: 运动命令名称
+        std: 指数奖励标准差
+        joint_threshold: joint error 阈值，只有低于此值才给 body 奖励
+        body_names: 要跟踪的 body 名称列表
+
+    Returns:
+        条件奖励值（joint error > threshold 时为 0）
+    """
+    command: MotionCommand = env.command_manager.get_term(command_name)
+
+    # 1. 计算 joint tracking error (mean squared error)
+    joint_error = torch.mean(
+        torch.square(command.joint_pos - command.robot_joint_pos), dim=-1
+    )  # (num_envs,)
+
+    # 2. 计算 body position error
+    body_indexes = _get_body_indexes(command, body_names)
+    body_error = torch.sum(
+        torch.square(command.body_pos_relative_w[:, body_indexes] - command.robot_body_pos_w[:, body_indexes]),
+        dim=-1,
+    )
+    body_reward = torch.exp(-body_error.mean(-1) / std**2)
+
+    # 3. 条件门控：只有 joint error < threshold 时才给 body 奖励
+    # 使用软门控（sigmoid）使梯度更平滑
+    gate = torch.sigmoid(-(joint_error - joint_threshold) * 10.0)  # 平滑过渡
+
+    return body_reward * gate
+
+
+def motion_conditional_body_orientation_error_exp(
+    env: MyBaseRLEnv,
+    command_name: str,
+    std: float,
+    joint_threshold: float = 1.0,
+    body_names: list[str] | None = None,
+) -> torch.Tensor:
+    """条件 body 级朝向奖励：只有当 joint error < 阈值时才给奖励。
+
+    与 motion_conditional_body_position_error_exp 相同逻辑，用于朝向跟踪。
+    """
+    command: MotionCommand = env.command_manager.get_term(command_name)
+
+    # 1. 计算 joint tracking error
+    joint_error = torch.mean(
+        torch.square(command.joint_pos - command.robot_joint_pos), dim=-1
+    )
+
+    # 2. 计算 body orientation error
+    body_indexes = _get_body_indexes(command, body_names)
+    body_error = (
+        quat_error_magnitude(command.body_quat_relative_w[:, body_indexes], command.robot_body_quat_w[:, body_indexes])
+        ** 2
+    )
+    body_reward = torch.exp(-body_error.mean(-1) / std**2)
+
+    # 3. 条件门控
+    gate = torch.sigmoid(-(joint_error - joint_threshold) * 10.0)
+
+    return body_reward * gate
+

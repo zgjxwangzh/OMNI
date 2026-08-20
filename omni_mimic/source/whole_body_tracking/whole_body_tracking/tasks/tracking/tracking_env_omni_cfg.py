@@ -407,16 +407,18 @@ class RewardsCfg:
         params={"command_name": "motion", "std": 2.0},
     )
     termination_penalty = RewTerm(func=mdp.is_terminated, weight=-1000.0)
-    # -- 削弱：body 级跟踪（避免策略"满足"）--
+    # -- 方案 B：条件 body 级奖励（只有 joint error < 阈值时才给）--
+    # 核心逻辑：策略必须"先学会跟踪，再享受稳定性奖励"
+    # 消除局部最优：策略无法在 joint error 大的情况下靠 body 奖励存活
     motion_body_pos = RewTerm(
-        func=mdp.motion_relative_body_position_error_exp,
-        weight=0.3,  # 1.0→0.3 削弱，只提供基本稳定性
-        params={"command_name": "motion", "std": 0.3},
+        func=mdp.motion_conditional_body_position_error_exp,
+        weight=0.5,
+        params={"command_name": "motion", "std": 0.3, "joint_threshold": 1.2},
     )
     motion_body_ori = RewTerm(
-        func=mdp.motion_relative_body_orientation_error_exp,
-        weight=0.3,  # 1.0→0.3 削弱
-        params={"command_name": "motion", "std": 0.4},
+        func=mdp.motion_conditional_body_orientation_error_exp,
+        weight=0.5,
+        params={"command_name": "motion", "std": 0.4, "joint_threshold": 1.2},
     )
     # -- 保留：基座级跟踪 --
     motion_global_anchor_pos = RewTerm(
