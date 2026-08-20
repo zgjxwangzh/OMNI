@@ -393,12 +393,12 @@ class RewardsCfg:
     # 方案：削弱 body 级 + 加强 joint 级 + linear penalty
     track_joint_pos = RewTerm(
         func=mdp.joint_pos_exp,
-        weight=8.0,  # 4.0→8.0 加强关节跟踪
-        params={"command_name": "motion", "std": 0.5},  # 1.0→0.5 更严格
+        weight=8.0,
+        params={"command_name": "motion", "std": 0.3},  # 0.5→0.3 更陡梯度
     )
     joint_pos_penalty = RewTerm(
         func=mdp.joint_pos_l2_penalty,
-        weight=15.0,  # 添加 linear penalty，防止满足
+        weight=30.0,  # 15→30 加倍压力
         params={"command_name": "motion"},
     )
     track_joint_vel = RewTerm(
