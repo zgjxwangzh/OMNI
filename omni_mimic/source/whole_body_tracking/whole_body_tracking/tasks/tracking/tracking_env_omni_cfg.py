@@ -388,14 +388,21 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    # -- Batch 3: 关节级跟踪（sum→mean 根本修复 + std/weight 重调）--
-    # 2026-08-20 最终修复: joint_pos_exp/joint_vel_exp 内部 sum→mean
-    # mean 下 error≈单关节 MSE, std=1.0 时 0.5rad 偏差→exp(-0.25)≈0.78 梯度强
-    # 参考: liuzq_jump_train_v11 跳高训练 mean+std=0.5 成功收敛(75cm)
+    # -- Batch 4: 指数+线性双管齐下 --
+    # 2026-08-20: 纯指数奖励 exp(-MSE/std²) 天生有上限 1.0
+    # std=1.0 时 MSE=0.109→exp=0.90, 策略"满足"不改善
+    # std=0.5 时 MSE=0.109→exp=0.65, 有压力但仍不够
+    # 新增 joint_pos_l2_penalty(-MSE) 线性惩罚: 误差不饱和, 持续施压
+    # 配合 exp std=0.5: 指数提供"好坏区分", 线性提供"持续压力"
     track_joint_pos = RewTerm(
         func=mdp.joint_pos_exp,
-        weight=6.0,
-        params={"command_name": "motion", "std": 1.0},
+        weight=8.0,
+        params={"command_name": "motion", "std": 0.5},
+    )
+    joint_pos_penalty = RewTerm(
+        func=mdp.joint_pos_l2_penalty,
+        weight=-10.0,
+        params={"command_name": "motion"},
     )
     track_joint_vel = RewTerm(
         func=mdp.joint_vel_exp,
