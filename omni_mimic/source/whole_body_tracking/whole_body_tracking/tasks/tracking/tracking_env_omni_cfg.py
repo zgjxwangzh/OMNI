@@ -388,20 +388,19 @@ class EventCfg:
 class RewardsCfg:
     """Reward terms for the MDP."""
 
-    # -- Batch 1: 关节级跟踪（替代 body 级跟踪）--
-    # body_names 不传(默认 None) → find_joints(None) 返回全 29 关节
-    # Batch 1 修复: std 从 0.5 提高到 20.0
-    # 原因: 奖励 = exp(-sum_sq_error / std^2)，sum_sq_error ≈ 29 * 6.22^2 ≈ 1122
-    # std=0.5 → exp(-4488)≈0; std=1.0 → exp(-1122)≈0; std=20 → exp(-2.8)≈0.06 ✓
+    # -- Batch 2: 关节级跟踪（sum→mean 修复 + std 重调）--
+    # 2026-08-20 修复: joint_pos_exp/joint_vel_exp 内部 sum→mean
+    # mean 下 error≈单关节 MSE, std=0.5 时 0.5rad 偏差→exp(-1)≈0.37 有梯度
+    # 参考: liuzq_jump_train_v11 跳高训练 mean+std=0.5 成功收敛
     track_joint_pos = RewTerm(
         func=mdp.joint_pos_exp,
-        weight=2.0,
-        params={"command_name": "motion", "std": 20.0},
+        weight=4.0,
+        params={"command_name": "motion", "std": 0.5},
     )
     track_joint_vel = RewTerm(
         func=mdp.joint_vel_exp,
-        weight=1.0,
-        params={"command_name": "motion", "std": 3.0},
+        weight=2.0,
+        params={"command_name": "motion", "std": 2.0},
     )
     termination_penalty = RewTerm(func=mdp.is_terminated, weight=-200.0)
     # -- 保留: 基座级跟踪（与关节级不冲突，不同层面）--
@@ -439,7 +438,7 @@ class RewardsCfg:
     action_rate_l2 = RewTerm(func=mdp.action_rate_l2, weight=-1e-1)
     joint_limit = RewTerm(
         func=mdp.joint_pos_limits,
-        weight=-10.0,
+        weight=-3.0,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=[".*"])},
     )
     # joint_torques_l2 = RewTerm(
