@@ -401,7 +401,7 @@ class RewardsCfg:
     )
     joint_pos_penalty = RewTerm(
         func=mdp.joint_pos_l2_penalty,
-        weight=20.0,  # 50 太重导致策略崩溃，20 适中
+        weight=30.0,  # 20 不够稳（曾到 1.35 但退化），30 应该能稳住
         params={"command_name": "motion"},
     )
     track_joint_vel = RewTerm(
