@@ -294,3 +294,53 @@ def motion_conditional_body_orientation_error_exp(
 
     return body_reward * gate
 
+
+########################################### 形态质量奖励 ###########################################
+def foot_clearance_reward(
+    env: MyBaseRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    min_height: float = 0.03,
+) -> torch.Tensor:
+    """奖励脚部离地高度：鼓励抬脚，不拖着走。
+    
+    当脚在摆动相（速度大）时，奖励离地高度。
+    """
+    asset = env.scene[asset_cfg.name]
+    foot_pos = asset.data.body_pos_w[:, asset_cfg.body_ids, 2]
+    foot_vel = asset.data.body_lin_vel_w[:, asset_cfg.body_ids, :2].norm(dim=-1)
+    swing_phase = foot_vel > 0.5
+    clearance = (foot_pos - min_height).clamp(min=0)
+    reward = clearance * swing_phase.float()
+    return reward.mean(dim=-1)
+
+
+def knee_bend_reward(
+    env: MyBaseRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    target_angle: float = 0.8,
+) -> torch.Tensor:
+    """奖励膝盖弯曲：跑步时膝盖应保持弯曲（约45°=0.78rad）。
+    
+    鼓励膝盖角度接近目标值。
+    """
+    asset = env.scene[asset_cfg.name]
+    knee_pos = asset.data.joint_pos[:, asset_cfg.joint_ids]
+    error = torch.mean(torch.square(knee_pos - target_angle), dim=-1)
+    return torch.exp(-error / 0.2)
+
+
+def trunk_stability_reward(
+    env: MyBaseRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """奖励躯干稳定性：只惩罚 roll 和 pitch 方向的晃动，不惩罚 yaw。
+    
+    跑步时躯干自然有 yaw 旋转，不应惩罚。
+    """
+    asset = env.scene[asset_cfg.name]
+    base_ang_vel = asset.data.body_ang_vel_w[:, asset_cfg.body_ids[0], :]
+    # 只惩罚 roll(x) 和 pitch(y)，不惩罚 yaw(z)
+    roll_pitch_vel = base_ang_vel[:, :2]
+    ang_vel_norm = roll_pitch_vel.norm(dim=-1)
+    return torch.exp(-ang_vel_norm / 2.0)
+

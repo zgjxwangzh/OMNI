@@ -42,6 +42,8 @@ omni_29dof_mjc/*
 # 用 ! 排除特定文件
 omni_mimic/*
 !omni_mimic/source/whole_body_tracking/whole_body_tracking/tasks/tracking/tracking_env_omni_cfg.py
+!omni_mimic/source/whole_body_tracking/whole_body_tracking/tasks/tracking/mdp/rewards.py
+!omni_mimic/source/whole_body_tracking/whole_body_tracking/tasks/tracking/config/omni/agents/rsl_rl_ppo_cfg.py
 
 # 临时文件
 tempshell.txt

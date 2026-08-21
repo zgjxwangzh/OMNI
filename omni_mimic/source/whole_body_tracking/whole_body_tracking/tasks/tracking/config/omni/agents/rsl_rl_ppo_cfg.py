@@ -16,8 +16,8 @@ class OmniFlatPPORunnerCfg(RslRlOnPolicyRunnerCfg):
     policy = RslRlPpoActorCriticCfg(
         init_noise_std=1.0,  # 回退到稳定值
         noise_std_type="scalar",
-        actor_hidden_dims=[3072, 1536, 768, 512],  # 回退到稳定网络
-        critic_hidden_dims=[3072, 1536, 768, 512],
+        actor_hidden_dims=[512, 256, 128],  # 小网络：训练快10x，过拟合少，sim2sim更好
+        critic_hidden_dims=[512, 256, 128],
         activation="elu",
     )
     algorithm = RslRlPpoAlgorithmCfg(

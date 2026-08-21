@@ -457,28 +457,62 @@ class RewardsCfg:
             "threshold": 1.0,
         },
     )
-    # feet_force_sym = RewTerm(
-    #     func=mdp.feet_force_symmetry,
-    #     weight=-0.005,
-    #     params={
-    #         "sensor_cfg": SceneEntityCfg(
-    #             "contact_forces",
-    #             body_names=["ankle_roll_l_link", "ankle_roll_r_link"],
-    #         ),
-    #         "force_threshold": 50.0,
-    #     },
-    # )
-    # feet_contact_sym = RewTerm(
-    #     func=mdp.feet_contact_symmetry,
-    #     weight=-0.002,
-    #     params={
-    #         "sensor_cfg": SceneEntityCfg(
-    #             "contact_forces",
-    #             body_names=["ankle_roll_l_link", "ankle_roll_r_link"],
-    #         ),
-    #         "force_threshold": 10.0,
-    #     },
-    # )
+    
+    # -- 形态质量奖励（解决跛腿、手下垂问题）--
+    # 1. 脚部离地高度（鼓励抬脚）
+    foot_clearance = RewTerm(
+        func=mdp.foot_clearance_reward,
+        weight=0.3,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["ankle_roll_l_link", "ankle_roll_r_link"]),
+            "min_height": 0.03,
+        },
+    )
+    
+    # 2. 膝盖弯曲（跑步时膝盖应保持弯曲约45°）
+    knee_bend = RewTerm(
+        func=mdp.knee_bend_reward,
+        weight=0.3,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["knee_pitch_l_joint", "knee_pitch_r_joint"]),
+            "target_angle": 0.8,
+        },
+    )
+    
+    # 3. 躯干稳定性（只惩罚 roll+pitch，不惩罚 yaw）
+    trunk_stability = RewTerm(
+        func=mdp.trunk_stability_reward,
+        weight=0.2,
+        params={
+            "asset_cfg": SceneEntityCfg("robot", body_names=["base_link"]),
+        },
+    )
+    
+    # 4. 脚力对称（加强 20x，解决跛腿）
+    feet_force_sym = RewTerm(
+        func=mdp.feet_force_symmetry,
+        weight=-0.1,
+        params={
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=["ankle_roll_l_link", "ankle_roll_r_link"],
+            ),
+            "force_threshold": 50.0,
+        },
+    )
+    
+    # 5. 脚接触对称（加强 50x，解决跛腿）
+    feet_contact_sym = RewTerm(
+        func=mdp.feet_contact_symmetry,
+        weight=-0.1,
+        params={
+            "sensor_cfg": SceneEntityCfg(
+                "contact_forces",
+                body_names=["ankle_roll_l_link", "ankle_roll_r_link"],
+            ),
+            "force_threshold": 10.0,
+        },
+    )
     
     
 
@@ -565,7 +599,7 @@ class TrackingEnvCfg(MyBaseRLEnvCfg):
         """Post initialization."""
         # general settings
         self.decimation = 4
-        self.episode_length_s = 10.0
+        self.episode_length_s = 5.0  # 缩短到5s，加速训练迭代
         # simulation settings
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
